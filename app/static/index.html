@@ -1,391 +1,343 @@
-<!doctype html>
+<!DOCTYPE html>
+
 <html lang="es">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#101612">
-  <title>JKR Terrain Generator v3.3.0</title>
-  <link rel="stylesheet" href="/styles.css">
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1" name="viewport"/>
+<meta content="#1b1d1f" name="theme-color"/>
+<title>JKR Terrain Generator v3.3.0</title>
+<link href="/styles.css" rel="stylesheet"/>
 </head>
-<body>
-<header class="topbar">
-  <div>
-    <h1>JKR Terrain Generator <span>v3.3.0</span></h1>
-    <p>Editor paint-first para diseñar mapas tipo Albion y compilarlos a Minecraft.</p>
-  </div>
-  <div class="top-actions">
-    <button id="new-project">Nuevo</button>
-    <button id="save-project">Guardar proyecto</button>
-    <label class="button-like">Abrir proyecto<input id="load-project" type="file" accept=".json,.jkrterrain.json,application/json" hidden></label>
-    <button id="compile-preview" class="accent">Compilar vista</button>
-    <button id="export-schematic" class="accent-strong">Exportar .schem</button>
-  </div>
-</header>
-
-<main class="workspace">
-  <aside class="sidebar left-panel">
-    <section class="panel">
-      <div class="panel-title"><h2>Proyecto</h2><span id="dirty-badge" class="badge">Sin guardar</span></div>
-      <div class="form-grid">
-        <label data-help="name">Nombre<input id="project-name" value="mapa_albion" maxlength="60"></label>
-        <label data-help="seed">Semilla
-          <span class="input-action-row"><input id="seed" type="number" value="123456" min="0" max="2147483647"><button id="randomize-seed" type="button" title="Generar una semilla aleatoria" aria-label="Generar una semilla aleatoria">🎲</button></span>
-        </label>
-        <label class="full" data-help="dimension_preset">Dimensión rápida
-          <select id="dimension-preset">
-            <option value="32x32">32 × 32</option>
-            <option value="64x64">64 × 64</option>
-            <option value="128x128">128 × 128</option>
-            <option value="256x256" selected>256 × 256</option>
-            <option value="384x384">384 × 384</option>
-            <option value="512x512">512 × 512</option>
-            <option value="768x768">768 × 768</option>
-            <option value="1024x1024">1024 × 1024</option>
-            <option value="1536x1536">1536 × 1536</option>
-            <option value="2048x2048">2048 × 2048</option>
-            <option value="1024x1536">1024 × 1536</option>
-            <option value="1536x1024">1536 × 1024</option>
-            <option value="custom">Personalizada</option>
-          </select>
-        </label>
-        <label data-help="width">Ancho X<input id="width" type="number" value="256" min="32" max="2048" step="16"></label>
-        <label data-help="length">Largo Z<input id="length" type="number" value="256" min="32" max="2048" step="16"></label>
-        <label data-help="schematic_height">Altura Y<input id="schematic-height" type="number" value="160" min="64" max="320"></label>
-        <label data-help="min_height">Altura mínima<input id="min-height" type="number" value="18" min="2" max="160"></label>
-        <label data-help="max_height">Altura máxima<input id="max-height" type="number" value="120" min="12" max="300"></label>
-        <label data-help="sea_level">Nivel del agua<input id="sea-level" type="number" value="46" min="4" max="250"></label>
-        <button id="apply-dimensions" class="full">Aplicar dimensiones</button>
-      </div>
-    </section>
-
-    <section class="panel">
-      <div class="panel-title"><h2>Capas</h2><button id="show-all" class="mini">Mostrar todas</button></div>
-      <div id="layer-list" class="layer-list"></div>
-      <label data-help="view_mode">Vista
+<body><div class="app-shell"><header class="topbar"><div class="brand-block"><button class="brand-button" data-tooltip="Abre la configuración general del proyecto." data-ui-action="project" type="button"><span class="brand-title">JKR Terrain</span><span class="brand-version">v3.3.0</span></button><span class="badge" id="dirty-badge">Sin guardar</span></div><nav aria-label="Acciones del proyecto" class="top-actions"><button data-tooltip="Crea un proyecto nuevo con la configuración inicial." id="new-project">Nuevo</button><label class="button-like" data-tooltip="Abre un proyecto .jkrterrain.json guardado anteriormente.">Abrir<input accept=".json,.jkrterrain.json,application/json" hidden="" id="load-project" type="file"/></label><button data-tooltip="Guarda el proyecto editable con todas sus capas y objetos." id="save-project">Guardar</button><span aria-hidden="true" class="toolbar-separator"></span><button class="accent" data-tooltip="Compila el terreno y actualiza validación, imágenes y vistas 3D." id="compile-preview">Compilar</button><button class="accent-strong" data-tooltip="Compila y genera el archivo schematic listo para Minecraft." id="export-schematic">Exportar .schem</button></nav><div class="view-actions"><button aria-pressed="false" class="view-toggle" data-tooltip="Muestra u oculta la configuración general del mapa." data-ui-action="project" type="button">Proyecto</button><button aria-pressed="false" class="view-toggle" data-tooltip="Muestra u oculta Capas, Herramientas, Entorno y Compilación." data-ui-action="inspector" type="button">Inspector</button><button aria-pressed="false" class="view-toggle" data-tooltip="Muestra u oculta validación, vistas compiladas y descargas." data-ui-action="results" type="button">Resultados</button></div></header><main class="workspace"><section class="editor-area">
+<div class="editor-toolbar">
+<div class="editor-history-actions">
+<button data-tooltip="Deshace la última modificación. Atajo: Ctrl+Z." id="undo" title="Deshacer (Ctrl+Z)">Deshacer</button>
+<button data-tooltip="Rehace la última modificación. Atajo: Ctrl+Y." id="redo" title="Rehacer (Ctrl+Y)">Rehacer</button>
+<button class="danger-soft" data-tooltip="Vacía únicamente la capa activa. No elimina otras capas." id="clear-layer">Vaciar capa</button>
+</div><div><strong id="active-layer-title">Altura base</strong><span id="cursor-info">X 0 · Z 0</span></div>
+<label data-help="zoom">Zoom <input id="zoom" max="400" min="25" step="25" type="range" value="100"/><span id="zoom-value">100%</span></label>
+<label class="check" data-tooltip="Activa o desactiva: Cuadrícula."><input id="grid-toggle" type="checkbox"/> Cuadrícula</label>
+</div>
+<div class="canvas-scroll" id="canvas-scroll">
+<div class="canvas-stage" id="canvas-stage">
+<canvas height="256" id="terrain-canvas" width="256"></canvas>
+<canvas height="256" id="overlay-canvas" width="256"></canvas>
+</div>
+</div>
+<div class="statusbar">
+<span id="project-size">256 × 256 celdas</span>
+<span id="history-info">Historial: 0</span>
+<span id="editor-message">Listo.</span>
+</div>
+</section><aside aria-label="Inspector del terreno" class="inspector-dock" id="inspector-dock"><section class="dock-section layer-dock"><div aria-label="Navegación del proyecto" class="dock-tabs" role="tablist"><button aria-controls="layers-dock-panel" aria-selected="true" class="active" data-dock-group="navigation" data-dock-target="layers-dock-panel" data-tooltip="Muestra el panel de capas." role="tab" type="button">Capas</button><button aria-controls="markers-dock-panel" aria-selected="false" class="" data-dock-group="navigation" data-dock-target="markers-dock-panel" data-tooltip="Muestra el panel de marcadores." role="tab" type="button">Marcadores</button></div><div class="dock-tab-panel active" id="layers-dock-panel" role="tabpanel"><section class="panel layers-panel">
+<div class="panel-title"><h2>Capas</h2><button class="mini" data-tooltip="Vuelve visibles todas las capas del proyecto." id="show-all">Mostrar todas</button></div>
+<div class="layer-list" id="layer-list"></div>
+<label data-help="view_mode">Vista
         <select id="view-mode"><option value="composite">Compuesta</option><option value="current">Solo capa activa</option></select>
-      </label>
-    </section>
-
-    <section class="panel">
-      <h2 id="brush-panel-title">Herramienta de meseta</h2>
-
-      <div id="plateau-tool-panel" class="plateau-tool-panel">
-        <p class="plateau-intro">Define una altura absoluta, el tamaño de la zona plana y cuántos bloques ocupará la pendiente. Después pinta directamente sobre el lienzo.</p>
-        <div class="form-grid">
-          <label class="full" data-help="plateau_height">Altura de la meseta (Y)
-            <span class="input-action-row plateau-height-row"><input id="plateau-height" type="number" value="72" min="2" max="300" step="1"><button id="plateau-pick-height" type="button">Tomar del terreno</button></span>
-          </label>
-          <label data-help="plateau_radius">Radio de la meseta<input id="plateau-radius" type="number" value="19" min="1" max="1024" step="1"></label>
-          <label data-help="plateau_slope_width">Anchura de la pendiente<input id="plateau-slope-width" type="number" value="8" min="0" max="1024" step="1"></label>
-          <label class="full toggle-row plateau-support-toggle" data-help="plateau_support_enabled"><input id="plateau-support-enabled" type="checkbox"> Generar soporte exterior</label>
-          <div id="plateau-support-fields" class="full plateau-support-fields" hidden>
-            <div class="form-grid compact-grid">
-              <label data-help="plateau_support_width">Anchura del soporte<input id="plateau-support-width" type="number" value="24" min="1" max="512" step="1"></label>
-              <label data-help="plateau_support_height">Altura del soporte<input id="plateau-support-height" type="number" value="25" min="1" max="100" step="1"><span class="unit-suffix">%</span></label>
-            </div>
-            <p class="support-note">La anchura controla el radio exterior. La altura controla cuánto se levanta el césped junto a la meseta.</p>
-          </div>
-          <label class="full" data-help="plateau_action">Acción
+</label>
+</section></div><div class="dock-tab-panel" hidden="" id="markers-dock-panel" role="tabpanel"><section class="panel markers-panel">
+<h2>Marcadores</h2>
+<div class="marker-tools">
+<button data-marker-tool="spawn">Spawn</button>
+<button data-marker-tool="exit">Salida</button>
+<button data-marker-tool="poi">Punto de interés</button>
+<button id="marker-select">Seleccionar</button>
+</div>
+<label data-help="marker_radius">Radio del marcador<input id="marker-radius" max="512" min="1" type="number" value="12"/></label>
+<div class="marker-list" id="marker-list"></div>
+</section></div></section><section class="dock-section property-dock"><div aria-label="Propiedades y compilación" class="dock-tabs" role="tablist"><button aria-controls="tool-dock-panel" aria-selected="true" class="active" data-dock-group="properties" data-dock-target="tool-dock-panel" data-tooltip="Muestra herramienta y sus parámetros." role="tab" type="button">Herramienta</button><button aria-controls="environment-dock-panel" aria-selected="false" class="" data-dock-group="properties" data-dock-target="environment-dock-panel" data-tooltip="Muestra entorno y sus parámetros." role="tab" type="button">Entorno</button><button aria-controls="compilation-dock-panel" aria-selected="false" class="" data-dock-group="properties" data-dock-target="compilation-dock-panel" data-tooltip="Muestra compilar y sus parámetros." role="tab" type="button">Compilar</button></div><div class="dock-tab-panel active" id="tool-dock-panel" role="tabpanel"><section class="panel tool-panel">
+<h2 id="brush-panel-title">Herramienta de meseta</h2>
+<div class="plateau-tool-panel" id="plateau-tool-panel">
+<details class="compact-details guide-details"><summary>Guía rápida</summary><p class="plateau-intro">Define una altura absoluta, el tamaño de la zona plana y cuántos bloques ocupará la pendiente. Después pinta directamente sobre el lienzo.</p></details>
+<div class="form-grid">
+<label class="full" data-help="plateau_height">Altura de la meseta (Y)
+            <span class="input-action-row plateau-height-row"><input id="plateau-height" max="300" min="2" step="1" type="number" value="72"/><button data-tooltip="Permite copiar la altura desde una celda del terreno." id="plateau-pick-height" type="button">Tomar del terreno</button></span>
+</label>
+<label data-help="plateau_radius">Radio de la meseta<input id="plateau-radius" max="1024" min="1" step="1" type="number" value="19"/></label>
+<label data-help="plateau_slope_width">Anchura de la pendiente<input id="plateau-slope-width" max="1024" min="0" step="1" type="number" value="8"/></label>
+<label class="full toggle-row plateau-support-toggle" data-help="plateau_support_enabled"><input id="plateau-support-enabled" type="checkbox"/> Generar soporte exterior</label>
+<div class="full plateau-support-fields" hidden="" id="plateau-support-fields">
+<div class="form-grid compact-grid">
+<label data-help="plateau_support_width">Anchura del soporte<input id="plateau-support-width" max="512" min="1" step="1" type="number" value="24"/></label>
+<label data-help="plateau_support_height">Altura del soporte<input id="plateau-support-height" max="100" min="1" step="1" type="number" value="25"/><span class="unit-suffix">%</span></label>
+</div>
+<p class="support-note">La anchura controla el radio exterior. La altura controla cuánto se levanta el césped junto a la meseta.</p>
+</div>
+<label class="full" data-help="plateau_action">Acción
             <select id="plateau-action"><option value="paint">Pintar meseta</option><option value="restore">Restaurar altura media</option></select>
-          </label>
-          <div id="plateau-tool-info" class="brush-profile-info">Meseta de 38 bloques de diámetro · pendiente de 8 · sin soporte exterior.</div>
-        </div>
-        <div class="plateau-rings-legend">
-          <span><i class="ring-sample inner"></i>Círculo amarillo: superficie plana</span>
-          <span><i class="ring-sample outer"></i>Círculo blanco: final de la pendiente</span>
-          <span id="plateau-support-legend" hidden><i class="ring-sample support"></i>Círculo verde: final del soporte exterior</span>
-        </div>
-      </div>
-
-      <div id="road-ramp-panel" class="road-ramp-panel" hidden>
-        <p class="plateau-intro">Los caminos normales solo cambian el material. La herramienta de rampa crea una subida explícita y limitada a su corredor.</p>
-        <label class="full" data-help="road_tool_mode">Herramienta vial
+</label>
+<div class="brush-profile-info" id="plateau-tool-info">Meseta de 38 bloques de diámetro · pendiente de 8 · sin soporte exterior.</div>
+</div>
+<details class="compact-details legend-details"><summary>Guía visual del pincel</summary><div class="plateau-rings-legend">
+<span><i class="ring-sample inner"></i>Círculo amarillo: superficie plana</span>
+<span><i class="ring-sample outer"></i>Círculo blanco: final de la pendiente</span>
+<span hidden="" id="plateau-support-legend"><i class="ring-sample support"></i>Círculo verde: final del soporte exterior</span>
+</div></details>
+</div>
+<div class="road-ramp-panel" hidden="" id="road-ramp-panel">
+<details class="compact-details guide-details"><summary>Guía rápida</summary><p class="plateau-intro">Los caminos normales solo cambian el material. La herramienta de rampa crea una subida explícita y limitada a su corredor.</p></details>
+<label class="full" data-help="road_tool_mode">Herramienta vial
           <select id="road-tool-mode"><option value="paint">Pintar camino</option><option value="ramp">Crear o editar rampa</option></select>
-        </label>
-        <div id="road-ramp-fields" hidden>
-          <div class="form-grid">
-            <label class="full" data-help="road_ramp_label">Nombre<input id="road-ramp-label" maxlength="80" placeholder="Ej.: Acceso norte"></label>
-            <label data-help="road_ramp_type">Tipo de camino<select id="road-ramp-type"><option value="primary">Principal</option><option value="secondary">Secundario</option></select></label>
-            <label data-help="road_ramp_width">Ancho transitable<input id="road-ramp-width" type="number" value="7" min="1" max="64" step="1"></label>
-            <label data-help="road_ramp_shoulder">Transición lateral base<input id="road-ramp-shoulder" type="number" value="5" min="0" max="64" step="1"></label>
-            <label data-help="road_ramp_ratio">Pendiente máxima 1:X<input id="road-ramp-ratio" type="number" value="3" min="1" max="12" step="0.25"></label>
-            <label data-help="road_ramp_start_landing">Descanso inferior<input id="road-ramp-start-landing" type="number" value="4" min="0" max="64" step="1"></label>
-            <label data-help="road_ramp_end_landing">Descanso superior<input id="road-ramp-end-landing" type="number" value="5" min="0" max="64" step="1"></label>
-            <label class="full toggle-row ramp-smoothing-toggle" data-help="road_ramp_smooth_sides"><input id="road-ramp-smooth-sides" type="checkbox" checked> Suavizar costados de la rampa</label>
-          </div>
-          <div id="road-ramp-smoothing-fields" class="road-ramp-smoothing-fields">
-            <div class="form-grid compact-grid">
-              <label data-help="road_ramp_side_ratio">Pendiente lateral 1:X<input id="road-ramp-side-ratio" type="number" value="2" min="0.5" max="8" step="0.25"></label>
-              <label data-help="road_ramp_max_side_width">Anchura lateral máxima<input id="road-ramp-max-side-width" type="number" value="24" min="1" max="128" step="1"></label>
-              <label data-help="road_ramp_side_roundness">Redondez lateral<input id="road-ramp-side-roundness" type="number" value="65" min="0" max="100" step="1"><span class="unit-suffix">%</span></label>
-              <label class="toggle-row" data-help="road_ramp_follow_terrain"><input id="road-ramp-follow-terrain" type="checkbox" checked> Adaptarse al terreno</label>
-            </div>
-            <p class="support-note">El centro transitable no cambia. Solo los costados usan una anchura adaptativa, limitada por el máximo configurado.</p>
-          </div>
-          <div id="road-ramp-info" class="brush-profile-info">Haz clic para colocar el punto inicial y continúa agregando puntos al recorrido.</div>
-          <div class="button-row road-ramp-actions">
-            <span class="action-help-wrap full-action"><button id="road-ramp-finish" type="button" class="accent" disabled>Finalizar rampa</button><button type="button" class="help-button" data-help-only="road_ramp_finish">?</button></span>
-            <span class="action-help-wrap"><button id="road-ramp-undo-point" type="button" disabled>Quitar último punto</button><button type="button" class="help-button" data-help-only="road_ramp_undo_point">?</button></span>
-            <span class="action-help-wrap"><button id="road-ramp-cancel" type="button" class="danger-soft" disabled>Cancelar</button><button type="button" class="help-button" data-help-only="road_ramp_cancel">?</button></span>
-          </div>
-          <div class="road-ramp-legend">
-            <span><i class="road-line shoulder"></i>Verde: alcance lateral calculado</span>
-            <span><i class="road-line center"></i>Amarillo: ancho transitable</span>
-          </div>
-          <div class="road-ramp-list-heading">Rampas guardadas</div>
-          <div id="road-ramp-list" class="road-ramp-list"><div class="empty-list">Aún no hay rampas.</div></div>
-        </div>
-      </div>
-
-
-      <div id="water-tool-panel" class="water-tool-panel" hidden>
-        <p class="plateau-intro">Pinta lagos directamente o dibuja ríos libres manteniendo el clic. Los ríos se suavizan y se guardan como objetos editables.</p>
-        <div class="form-grid">
-          <label class="full" data-help="water_tool_mode">Herramienta de agua
+</label>
+<div hidden="" id="road-ramp-fields">
+<div class="form-grid">
+<label class="full" data-help="road_ramp_label">Nombre<input id="road-ramp-label" maxlength="80" placeholder="Ej.: Acceso norte"/></label>
+<label data-help="road_ramp_type">Tipo de camino<select id="road-ramp-type"><option value="primary">Principal</option><option value="secondary">Secundario</option></select></label>
+<label data-help="road_ramp_width">Ancho transitable<input id="road-ramp-width" max="64" min="1" step="1" type="number" value="7"/></label>
+<label data-help="road_ramp_shoulder">Transición lateral base<input id="road-ramp-shoulder" max="64" min="0" step="1" type="number" value="5"/></label>
+<label data-help="road_ramp_ratio">Pendiente máxima 1:X<input id="road-ramp-ratio" max="12" min="1" step="0.25" type="number" value="3"/></label>
+<label data-help="road_ramp_start_landing">Descanso inferior<input id="road-ramp-start-landing" max="64" min="0" step="1" type="number" value="4"/></label>
+<label data-help="road_ramp_end_landing">Descanso superior<input id="road-ramp-end-landing" max="64" min="0" step="1" type="number" value="5"/></label>
+<label class="full toggle-row ramp-smoothing-toggle" data-help="road_ramp_smooth_sides"><input checked="" id="road-ramp-smooth-sides" type="checkbox"/> Suavizar costados de la rampa</label>
+</div>
+<div class="road-ramp-smoothing-fields" id="road-ramp-smoothing-fields">
+<div class="form-grid compact-grid">
+<label data-help="road_ramp_side_ratio">Pendiente lateral 1:X<input id="road-ramp-side-ratio" max="8" min="0.5" step="0.25" type="number" value="2"/></label>
+<label data-help="road_ramp_max_side_width">Anchura lateral máxima<input id="road-ramp-max-side-width" max="128" min="1" step="1" type="number" value="24"/></label>
+<label data-help="road_ramp_side_roundness">Redondez lateral<input id="road-ramp-side-roundness" max="100" min="0" step="1" type="number" value="65"/><span class="unit-suffix">%</span></label>
+<label class="toggle-row" data-help="road_ramp_follow_terrain"><input checked="" id="road-ramp-follow-terrain" type="checkbox"/> Adaptarse al terreno</label>
+</div>
+<p class="support-note">El centro transitable no cambia. Solo los costados usan una anchura adaptativa, limitada por el máximo configurado.</p>
+</div>
+<div class="brush-profile-info" id="road-ramp-info">Haz clic para colocar el punto inicial y continúa agregando puntos al recorrido.</div>
+<div class="button-row road-ramp-actions">
+<span class="action-help-wrap full-action"><button class="accent" disabled="" id="road-ramp-finish" type="button">Finalizar rampa</button><button class="help-button" data-help-only="road_ramp_finish" type="button">?</button></span>
+<span class="action-help-wrap"><button disabled="" id="road-ramp-undo-point" type="button">Quitar último punto</button><button class="help-button" data-help-only="road_ramp_undo_point" type="button">?</button></span>
+<span class="action-help-wrap"><button class="danger-soft" disabled="" id="road-ramp-cancel" type="button">Cancelar</button><button class="help-button" data-help-only="road_ramp_cancel" type="button">?</button></span>
+</div>
+<details class="compact-details legend-details"><summary>Guía visual de la rampa</summary><div class="road-ramp-legend">
+<span><i class="road-line shoulder"></i>Verde: alcance lateral calculado</span>
+<span><i class="road-line center"></i>Amarillo: ancho transitable</span>
+</div></details>
+<div class="road-ramp-list-heading">Rampas guardadas</div>
+<div class="road-ramp-list" id="road-ramp-list"><div class="empty-list">Aún no hay rampas.</div></div>
+</div>
+</div>
+<div class="water-tool-panel" hidden="" id="water-tool-panel">
+<details class="compact-details guide-details"><summary>Guía rápida</summary><p class="plateau-intro">Pinta lagos directamente o dibuja ríos libres manteniendo el clic. Los ríos se suavizan y se guardan como objetos editables.</p></details>
+<div class="form-grid">
+<label class="full" data-help="water_tool_mode">Herramienta de agua
             <select id="water-tool-mode"><option value="mass">Masa de agua</option><option value="river">Río libre</option></select>
-          </label>
-          <label id="water-mass-action-field" class="full" data-help="water_mass_action">Acción
+</label>
+<label class="full" data-help="water_mass_action" id="water-mass-action-field">Acción
             <select id="water-mass-action"><option value="paint">Pintar agua</option><option value="erase">Borrar agua</option></select>
-          </label>
-          <label id="water-course-label-field" class="full" data-help="water_course_label" hidden>Nombre del río<input id="water-course-label" maxlength="80" placeholder="Ej.: Río del norte"></label>
-          <label data-help="water_width">Ancho del agua<input id="water-width" type="number" value="10" min="1" max="128" step="1"></label>
-          <label data-help="water_depth">Profundidad<input id="water-depth" type="number" value="3" min="1" max="32" step="1"></label>
-          <label data-help="water_shore_width">Anchura de la orilla<input id="water-shore-width" type="number" value="6" min="0" max="128" step="1"></label>
-          <label data-help="water_shore_profile">Perfil de orilla<select id="water-shore-profile"><option value="compact">Compacta</option><option value="natural" selected>Natural</option><option value="smooth">Suave</option></select></label>
-          <label class="full" data-help="water_road_policy">Al cruzar caminos<select id="water-road-policy"><option value="protect" selected>Proteger camino</option><option value="ford">Crear vado</option><option value="cut">Cortar camino</option></select></label>
-        </div>
-        <div id="water-course-fields" hidden>
-          <div class="form-grid compact-grid">
-            <label data-help="water_course_smoothing">Suavizado del trazo<input id="water-course-smoothing" type="number" value="60" min="0" max="100" step="1"><span class="unit-suffix">%</span></label>
-            <label class="toggle-row" data-help="water_course_exit"><input id="water-course-exit" type="checkbox"> Final como salida entre montañas</label>
-          </div>
-          <div id="water-course-info" class="brush-profile-info">Mantén clic y dibuja libremente el recorrido. Al soltar se creará el río.</div>
-          <div class="button-row water-course-actions">
-            <span class="action-help-wrap"><button id="water-course-apply" type="button" class="accent" disabled>Aplicar cambios</button><button type="button" class="help-button" data-help-only="water_course_apply">?</button></span>
-            <span class="action-help-wrap"><button id="water-course-cancel" type="button" class="danger-soft" disabled>Cancelar edición</button><button type="button" class="help-button" data-help-only="water_course_cancel">?</button></span>
-          </div>
-          <div class="water-course-legend">
-            <span><i class="water-line shore"></i>Celeste: límite de orilla</span>
-            <span><i class="water-line center"></i>Azul: ancho del cauce</span>
-            <span><i class="water-exit-dot"></i>Rojo: salida del agua</span>
-          </div>
-          <div class="road-ramp-list-heading">Ríos guardados</div>
-          <div id="water-course-list" class="road-ramp-list"><div class="empty-list">Aún no hay ríos.</div></div>
-        </div>
-        <div id="water-mass-info" class="brush-profile-info">Pinta una masa de agua de 10 bloques de ancho, 3 de profundidad y orilla natural de 6.</div>
-      </div>
-
-      <div id="structure-tool-panel" class="structure-tool-panel" hidden>
-        <p class="plateau-intro">Crea colecciones de árboles o rocas, importa variantes .schem y pinta poblaciones densas directamente sobre el mapa.</p>
-        <div class="form-grid">
-          <label class="full" data-help="structure_tool_mode">Herramienta
+</label>
+<label class="full" data-help="water_course_label" hidden="" id="water-course-label-field">Nombre del río<input id="water-course-label" maxlength="80" placeholder="Ej.: Río del norte"/></label>
+<label data-help="water_width">Ancho del agua<input id="water-width" max="128" min="1" step="1" type="number" value="10"/></label>
+<label data-help="water_depth">Profundidad<input id="water-depth" max="32" min="1" step="1" type="number" value="3"/></label>
+<label data-help="water_shore_width">Anchura de la orilla<input id="water-shore-width" max="128" min="0" step="1" type="number" value="6"/></label>
+<label data-help="water_shore_profile">Perfil de orilla<select id="water-shore-profile"><option value="compact">Compacta</option><option selected="" value="natural">Natural</option><option value="smooth">Suave</option></select></label>
+<label class="full" data-help="water_road_policy">Al cruzar caminos<select id="water-road-policy"><option selected="" value="protect">Proteger camino</option><option value="ford">Crear vado</option><option value="cut">Cortar camino</option></select></label>
+</div>
+<div hidden="" id="water-course-fields">
+<div class="form-grid compact-grid">
+<label data-help="water_course_smoothing">Suavizado del trazo<input id="water-course-smoothing" max="100" min="0" step="1" type="number" value="60"/><span class="unit-suffix">%</span></label>
+<label class="toggle-row" data-help="water_course_exit"><input id="water-course-exit" type="checkbox"/> Final como salida entre montañas</label>
+</div>
+<div class="brush-profile-info" id="water-course-info">Mantén clic y dibuja libremente el recorrido. Al soltar se creará el río.</div>
+<div class="button-row water-course-actions">
+<span class="action-help-wrap"><button class="accent" disabled="" id="water-course-apply" type="button">Aplicar cambios</button><button class="help-button" data-help-only="water_course_apply" type="button">?</button></span>
+<span class="action-help-wrap"><button class="danger-soft" disabled="" id="water-course-cancel" type="button">Cancelar edición</button><button class="help-button" data-help-only="water_course_cancel" type="button">?</button></span>
+</div>
+<details class="compact-details legend-details"><summary>Guía visual del río</summary><div class="water-course-legend">
+<span><i class="water-line shore"></i>Celeste: límite de orilla</span>
+<span><i class="water-line center"></i>Azul: ancho del cauce</span>
+<span><i class="water-exit-dot"></i>Rojo: salida del agua</span>
+</div></details>
+<div class="road-ramp-list-heading">Ríos guardados</div>
+<div class="road-ramp-list" id="water-course-list"><div class="empty-list">Aún no hay ríos.</div></div>
+</div>
+<div class="brush-profile-info" id="water-mass-info">Pinta una masa de agua de 10 bloques de ancho, 3 de profundidad y orilla natural de 6.</div>
+</div>
+<div class="structure-tool-panel" hidden="" id="structure-tool-panel">
+<details class="compact-details guide-details"><summary>Guía rápida</summary><p class="plateau-intro">Crea colecciones de árboles o rocas, importa variantes .schem y pinta poblaciones densas directamente sobre el mapa.</p></details>
+<div class="form-grid">
+<label class="full" data-help="structure_tool_mode">Herramienta
             <select id="structure-tool-mode"><option value="populate">Poblar</option><option value="stamp">Colocar una</option><option value="erase">Borrar estructuras</option></select>
-          </label>
-          <label class="full" data-help="structure_collection">Colección<select id="structure-collection-select"><option value="">Crea una colección</option></select></label>
-          <label data-help="structure_brush_size">Diámetro del pincel<input id="structure-brush-size" type="number" value="60" min="1" max="1024" step="1"></label>
-          <label data-help="structure_density">Cantidad<input id="structure-density" type="number" value="100" min="5" max="200" step="5"><span class="unit-suffix">%</span></label>
-          <label data-help="structure_spacing">Separación mínima<input id="structure-spacing" type="number" value="4" min="0" max="128" step="1"></label>
-          <label data-help="structure_sink">Hundimiento<input id="structure-sink" type="number" value="1" min="0" max="32" step="1"></label>
-          <label class="toggle-row" data-help="structure_random_rotation"><input id="structure-random-rotation" type="checkbox" checked> Rotación aleatoria</label>
-          <label class="toggle-row" data-help="structure_random_mirror"><input id="structure-random-mirror" type="checkbox"> Reflejo aleatorio</label>
-        </div>
-        <details class="structure-advanced">
-          <summary>Restricciones de colocación</summary>
-          <div class="form-grid compact-grid">
-            <label class="toggle-row" data-help="structure_avoid_water"><input id="structure-avoid-water" type="checkbox" checked> Evitar agua</label>
-            <label class="toggle-row" data-help="structure_avoid_roads"><input id="structure-avoid-roads" type="checkbox" checked> Evitar caminos y rampas</label>
-            <label class="toggle-row" data-help="structure_avoid_reserved"><input id="structure-avoid-reserved" type="checkbox" checked> Evitar zonas reservadas</label>
-          </div>
-        </details>
-        <div id="structure-tool-info" class="brush-profile-info">Crea una colección e importa al menos un archivo .schem.</div>
-        <div class="structure-library">
-          <div class="road-ramp-list-heading">Colecciones y schematics</div>
-          <div class="structure-create-row">
-            <input id="structure-collection-name" maxlength="80" placeholder="Ej.: Bosque de robles">
-            <select id="structure-collection-category"><option value="tree">Árboles</option><option value="rock">Rocas</option></select>
-            <button id="structure-collection-create" type="button">Crear</button>
-          </div>
-          <div class="button-row structure-import-actions">
-            <label class="button-like accent">Importar .schem<input id="structure-import-files" type="file" accept=".schem,application/octet-stream" multiple hidden></label>
-            <button id="structure-delete-collection" type="button" class="danger-soft">Eliminar colección</button>
-          </div>
-          <div id="structure-asset-list" class="structure-asset-list"><div class="empty-list">Selecciona una colección.</div></div>
-          <div id="structure-placement-count" class="support-note">0 estructuras colocadas.</div>
-        </div>
-      </div>
+</label>
+<label class="full" data-help="structure_collection">Colección<select id="structure-collection-select"><option value="">Crea una colección</option></select></label>
+<label data-help="structure_brush_size">Diámetro del pincel<input id="structure-brush-size" max="1024" min="1" step="1" type="number" value="60"/></label>
+<label data-help="structure_density">Cantidad<input id="structure-density" max="200" min="5" step="5" type="number" value="100"/><span class="unit-suffix">%</span></label>
+<label data-help="structure_spacing">Separación mínima<input id="structure-spacing" max="128" min="0" step="1" type="number" value="4"/></label>
+<label data-help="structure_sink">Hundimiento<input id="structure-sink" max="32" min="0" step="1" type="number" value="1"/></label>
+<label class="toggle-row" data-help="structure_random_rotation"><input checked="" id="structure-random-rotation" type="checkbox"/> Rotación aleatoria</label>
+<label class="toggle-row" data-help="structure_random_mirror"><input id="structure-random-mirror" type="checkbox"/> Reflejo aleatorio</label>
+</div>
+<details class="structure-advanced">
+<summary>Restricciones de colocación</summary>
+<div class="form-grid compact-grid">
+<label class="toggle-row" data-help="structure_avoid_water"><input checked="" id="structure-avoid-water" type="checkbox"/> Evitar agua</label>
+<label class="toggle-row" data-help="structure_avoid_roads"><input checked="" id="structure-avoid-roads" type="checkbox"/> Evitar caminos y rampas</label>
+<label class="toggle-row" data-help="structure_avoid_reserved"><input checked="" id="structure-avoid-reserved" type="checkbox"/> Evitar zonas reservadas</label>
+</div>
+</details>
+<div class="brush-profile-info" id="structure-tool-info">Crea una colección e importa al menos un archivo .schem.</div>
+<div class="structure-library">
+<div class="road-ramp-list-heading">Colecciones y schematics</div>
+<div class="structure-create-row">
+<input id="structure-collection-name" maxlength="80" placeholder="Ej.: Bosque de robles"/>
+<select id="structure-collection-category"><option value="tree">Árboles</option><option value="rock">Rocas</option></select>
+<button id="structure-collection-create" type="button">Crear</button>
+</div>
+<div class="button-row structure-import-actions">
+<label class="button-like accent">Importar .schem<input accept=".schem,application/octet-stream" hidden="" id="structure-import-files" multiple="" type="file"/></label>
+<button class="danger-soft" id="structure-delete-collection" type="button">Eliminar colección</button>
+</div>
+<div class="structure-asset-list" id="structure-asset-list"><div class="empty-list">Selecciona una colección.</div></div>
+<div class="support-note" id="structure-placement-count">0 estructuras colocadas.</div>
+</div>
+</div>
+<div class="form-grid" hidden="" id="standard-brush-panel">
+<label class="full" data-help="brush_action">Acción<select id="brush-action"></select></label>
+<label data-help="brush_size">Diámetro total<input id="brush-size" max="2048" min="1" step="1" type="number" value="18"/></label>
+<label data-help="brush_hardness">Dureza<input id="brush-hardness" max="100" min="0" type="number" value="70"/></label>
+<label class="full toggle-row brush-toggle" data-help="elevation_profile_enabled" id="elevation-profile-enabled-field"><input id="elevation-profile-enabled" type="checkbox"/> Perfil avanzado de relieve</label>
+<label class="full toggle-row brush-toggle" data-help="brush_core_mode" id="brush-core-mode-field"><input id="brush-core-mode" type="checkbox"/> Controlar el núcleo directamente</label>
+<label data-help="brush_core_radius" id="brush-core-radius-field">Radio del núcleo<input id="brush-core-radius" max="1024" min="0" step="0.5" type="number" value="6"/></label>
+<div class="full elevation-profile-fields" hidden="" id="elevation-profile-fields">
+<div class="elevation-profile-heading">Perfil del modificador</div>
+<div class="form-grid compact-grid">
+<label data-help="brush_slope_width">Ancho del talud<input id="brush-slope-width" max="1024" min="0" step="0.5" type="number" value="4"/></label>
+<label class="toggle-row brush-toggle" data-help="brush_base_enabled"><input checked="" id="brush-base-enabled" type="checkbox"/> Generar base exterior</label>
+<div class="full nested-profile-fields" id="brush-base-fields">
+<label data-help="brush_base_width">Ancho de la base<input id="brush-base-width" max="1024" min="0" step="0.5" type="number" value="8"/></label>
+<label data-help="brush_base_intensity">Intensidad de la base<input id="brush-base-intensity" max="100" min="0" step="1" type="number" value="25"/></label>
+</div>
+<label data-help="brush_profile_shape">Perfil de descenso<select id="brush-profile-shape"><option value="linear">Lineal</option><option selected="" value="smooth">Suave</option><option value="terraced">Escalonado Minecraft</option></select></label>
+<label data-help="brush_terrace_steps" hidden="" id="brush-terrace-steps-field">Niveles de escalón<input id="brush-terrace-steps" max="32" min="2" step="1" type="number" value="6"/></label>
+<label class="full toggle-row brush-toggle" data-help="brush_strict_clip"><input checked="" id="brush-strict-clip" type="checkbox"/> Recortar exactamente al radio exterior</label>
+</div>
+</div>
+<div class="brush-profile-info" id="brush-profile-info">Radio total 9 · núcleo 6,3 · transición 2,7 bloques.</div>
+<label data-help="brush_opacity">Opacidad<input id="brush-opacity" max="100" min="1" type="number" value="100"/></label>
+<label data-help="brush_strength">Fuerza<input id="brush-strength" max="64" min="1" type="number" value="12"/></label>
+<label data-help="brush_shape">Forma<select id="brush-shape"><option value="circle">Circular</option><option value="square">Cuadrada</option></select></label>
+<label data-help="stroke_mode">Trazo<select id="stroke-mode"><option value="free">Libre</option><option value="line">Línea recta</option></select></label>
+<label class="full toggle-row brush-toggle" data-help="stroke_accumulation" id="stroke-accumulation-field"><input id="stroke-accumulation" type="checkbox"/> Acumular intensidad al repasar durante el mismo clic</label>
+<label class="full" data-help="paint_value" id="value-field">Valor<select id="paint-value"></select></label>
+</div>
+<details class="compact-details preset-details"><summary>Presets de herramienta</summary><div class="full preset-manager">
+<label data-help="brush_presets">Preset de herramienta<input id="brush-preset-name" maxlength="40" placeholder="Ej.: Meseta Y80"/></label>
+<div class="preset-actions"><select id="brush-preset-select"><option value="">Selecciona un preset</option></select><button id="brush-preset-save" type="button">Guardar</button><button id="brush-preset-load" type="button">Cargar</button><button class="danger-soft" id="brush-preset-delete" type="button">Borrar</button></div>
+</div></details>
 
-      <div id="standard-brush-panel" class="form-grid" hidden>
-        <label class="full" data-help="brush_action">Acción<select id="brush-action"></select></label>
-        <label data-help="brush_size">Diámetro total<input id="brush-size" type="number" value="18" min="1" max="2048" step="1"></label>
-        <label data-help="brush_hardness">Dureza<input id="brush-hardness" type="number" value="70" min="0" max="100"></label>
-        <label id="elevation-profile-enabled-field" class="full toggle-row brush-toggle" data-help="elevation_profile_enabled"><input id="elevation-profile-enabled" type="checkbox"> Perfil avanzado de relieve</label>
-        <label id="brush-core-mode-field" class="full toggle-row brush-toggle" data-help="brush_core_mode"><input id="brush-core-mode" type="checkbox"> Controlar el núcleo directamente</label>
-        <label id="brush-core-radius-field" data-help="brush_core_radius">Radio del núcleo<input id="brush-core-radius" type="number" value="6" min="0" max="1024" step="0.5"></label>
-        <div id="elevation-profile-fields" class="full elevation-profile-fields" hidden>
-          <div class="elevation-profile-heading">Perfil del modificador</div>
-          <div class="form-grid compact-grid">
-            <label data-help="brush_slope_width">Ancho del talud<input id="brush-slope-width" type="number" value="4" min="0" max="1024" step="0.5"></label>
-            <label class="toggle-row brush-toggle" data-help="brush_base_enabled"><input id="brush-base-enabled" type="checkbox" checked> Generar base exterior</label>
-            <div id="brush-base-fields" class="full nested-profile-fields">
-              <label data-help="brush_base_width">Ancho de la base<input id="brush-base-width" type="number" value="8" min="0" max="1024" step="0.5"></label>
-              <label data-help="brush_base_intensity">Intensidad de la base<input id="brush-base-intensity" type="number" value="25" min="0" max="100" step="1"></label>
-            </div>
-            <label data-help="brush_profile_shape">Perfil de descenso<select id="brush-profile-shape"><option value="linear">Lineal</option><option value="smooth" selected>Suave</option><option value="terraced">Escalonado Minecraft</option></select></label>
-            <label id="brush-terrace-steps-field" data-help="brush_terrace_steps" hidden>Niveles de escalón<input id="brush-terrace-steps" type="number" value="6" min="2" max="32" step="1"></label>
-            <label class="full toggle-row brush-toggle" data-help="brush_strict_clip"><input id="brush-strict-clip" type="checkbox" checked> Recortar exactamente al radio exterior</label>
-          </div>
-        </div>
-        <div id="brush-profile-info" class="brush-profile-info">Radio total 9 · núcleo 6,3 · transición 2,7 bloques.</div>
-        <label data-help="brush_opacity">Opacidad<input id="brush-opacity" type="number" value="100" min="1" max="100"></label>
-        <label data-help="brush_strength">Fuerza<input id="brush-strength" type="number" value="12" min="1" max="64"></label>
-        <label data-help="brush_shape">Forma<select id="brush-shape"><option value="circle">Circular</option><option value="square">Cuadrada</option></select></label>
-        <label data-help="stroke_mode">Trazo<select id="stroke-mode"><option value="free">Libre</option><option value="line">Línea recta</option></select></label>
-        <label id="stroke-accumulation-field" class="full toggle-row brush-toggle" data-help="stroke_accumulation"><input id="stroke-accumulation" type="checkbox"> Acumular intensidad al repasar durante el mismo clic</label>
-        <label id="value-field" class="full" data-help="paint_value">Valor<select id="paint-value"></select></label>
-      </div>
-
-      <div class="full preset-manager">
-        <label data-help="brush_presets">Preset de herramienta<input id="brush-preset-name" maxlength="40" placeholder="Ej.: Meseta Y80"></label>
-        <div class="preset-actions"><select id="brush-preset-select"><option value="">Selecciona un preset</option></select><button id="brush-preset-save" type="button">Guardar</button><button id="brush-preset-load" type="button">Cargar</button><button id="brush-preset-delete" type="button" class="danger-soft">Borrar</button></div>
-      </div>
-      <div class="button-row">
-        <button id="undo" title="Deshacer (Ctrl+Z)">Deshacer</button>
-        <button id="redo" title="Rehacer (Ctrl+Y)">Rehacer</button>
-        <button id="clear-layer" class="danger-soft">Vaciar capa</button>
-      </div>
-    </section>
-
-    <section class="panel">
-      <h2>Marcadores</h2>
-      <div class="marker-tools">
-        <button data-marker-tool="spawn">Spawn</button>
-        <button data-marker-tool="exit">Salida</button>
-        <button data-marker-tool="poi">Punto de interés</button>
-        <button id="marker-select">Seleccionar</button>
-      </div>
-      <label data-help="marker_radius">Radio del marcador<input id="marker-radius" type="number" value="12" min="1" max="512"></label>
-      <div id="marker-list" class="marker-list"></div>
-    </section>
-  </aside>
-
-  <section class="editor-area">
-    <div class="editor-toolbar">
-      <div><strong id="active-layer-title">Altura base</strong><span id="cursor-info">X 0 · Z 0</span></div>
-      <label data-help="zoom">Zoom <input id="zoom" type="range" min="25" max="400" value="100" step="25"><span id="zoom-value">100%</span></label>
-      <label class="check"><input id="grid-toggle" type="checkbox"> Cuadrícula</label>
-    </div>
-    <div id="canvas-scroll" class="canvas-scroll">
-      <div id="canvas-stage" class="canvas-stage">
-        <canvas id="terrain-canvas" width="256" height="256"></canvas>
-        <canvas id="overlay-canvas" width="256" height="256"></canvas>
-      </div>
-    </div>
-    <div class="statusbar">
-      <span id="project-size">256 × 256 celdas</span>
-      <span id="history-info">Historial: 0</span>
-      <span id="editor-message">Listo.</span>
-    </div>
-  </section>
-
-  <aside class="sidebar right-panel">
-    <section class="panel">
-      <h2>Compilación</h2>
-      <div class="form-grid">
-        <label data-help="height_modifier_range">Rango modificador<input id="modifier-range" type="number" value="32" min="4" max="128"></label>
-        <label data-help="max_walk_slope">Pendiente transitable<input id="max-walk-slope" type="number" value="1.75" min="0.25" max="8" step="0.05"></label>
-        <label data-help="surface_depth">Profundidad del suelo<input id="surface-depth" type="number" value="4" min="1" max="16"></label>
-        <label class="full" data-help="data_version">DataVersion<input id="data-version" type="number" value="4189" min="0" max="100000"></label>
-      </div>
-      <p class="compile-clean-note">Los caminos pintados y las zonas reservadas no cambian la altura. Solo las Rampas viales explícitas modifican el relieve dentro de su corredor.</p>
-      <div class="preset-manager">
-        <label data-help="compilation_presets">Preset de compilación<input id="compilation-preset-name" maxlength="40" placeholder="Ej.: Caminos suaves"></label>
-        <div class="preset-actions"><select id="compilation-preset-select"><option value="">Selecciona un preset</option></select><button id="compilation-preset-save" type="button">Guardar</button><button id="compilation-preset-load" type="button">Cargar</button><button id="compilation-preset-delete" type="button" class="danger-soft">Borrar</button></div>
-      </div>
-      <div id="voxel-budget" class="budget"></div>
-    </section>
-
-    <section class="panel mountain-panel">
-      <div class="panel-title"><h2>Borde montañoso</h2><span id="mountain-status" class="badge neutral">Desactivado</span></div>
-      <label class="toggle-row" data-help="mountain_border_enabled"><input id="mountain-border-enabled" type="checkbox"> Generar cordillera desde Límite jugable</label>
-      <div id="mountain-settings" class="form-grid mountain-settings">
-        <label data-help="mountain_outer_width">Anchura exterior<input id="mountain-outer-width" type="number" value="32" min="4" max="512"></label>
-        <label data-help="mountain_inner_transition">Transición interior<input id="mountain-inner-transition" type="number" value="18" min="2" max="512"></label>
-        <label data-help="mountain_height">Altura del borde<input id="mountain-height" type="number" value="38" min="4" max="240"></label>
-        <label data-help="mountain_irregularity">Irregularidad %<input id="mountain-irregularity" type="number" value="45" min="0" max="100"></label>
-        <label data-help="mountain_roughness">Rugosidad %<input id="mountain-roughness" type="number" value="35" min="0" max="100"></label>
-        <label data-help="mountain_exit_width">Anchura salidas<input id="mountain-exit-width" type="number" value="14" min="4" max="256"></label>
-        <label class="full" data-help="mountain_exit_transition">Adaptación de salidas<input id="mountain-exit-transition" type="number" value="36" min="4" max="512"></label>
-      </div>
-      <label class="toggle-row" data-help="mountain_canvas_guide"><input id="mountain-canvas-guide" type="checkbox" checked> Mostrar contorno y guía en el lienzo</label>
-      <div class="preset-manager">
-        <label data-help="mountain_presets">Preset de borde montañoso<input id="mountain-preset-name" maxlength="40" placeholder="Ej.: Cordillera alta"></label>
-        <div class="preset-actions"><select id="mountain-preset-select"><option value="">Selecciona un preset</option></select><button id="mountain-preset-save" type="button">Guardar</button><button id="mountain-preset-load" type="button">Cargar</button><button id="mountain-preset-delete" type="button" class="danger-soft">Borrar</button></div>
-      </div>
-      <label class="full action-label" data-help="prepare_mountain_margin"><button id="prepare-mountain-margin" class="mountain-margin-button" type="button">Preparar margen automático</button></label>
-      <div id="mountain-margin-info" class="mountain-info">Reserva una franja no jugable del mismo ancho que la cordillera.</div>
-    </section>
-
-    <section class="panel">
-      <div class="panel-title"><h2>Validación</h2><span id="validation-status" class="badge neutral">Sin compilar</span></div>
-      <div id="validation-summary" class="validation-summary">Pinta la estructura y compila una vista para revisar salidas, caminos y transitabilidad.</div>
-      <div id="validation-issues" class="issue-list"></div>
-    </section>
-
-    <section class="panel preview-panel">
-      <h2>Resultados</h2>
-      <div class="preview-tabs">
-        <button data-preview="preview" class="active">Terreno</button>
-        <button data-preview="heightmap">Altura</button>
-        <button data-preview="slope">Pendiente</button>
-        <button data-preview="walkability">Transitabilidad</button>
-        <button data-preview="terrain3d">Vista 3D</button>
-        <button data-preview="voxel3d">Vista Minecraft</button>
-      </div>
-      <div class="preview-frame">
-        <img id="result-preview" alt="Vista compilada">
-        <div id="terrain-3d-view" class="terrain-3d-view" hidden>
-          <canvas id="terrain-3d-canvas" aria-label="Vista 3D interactiva del terreno compilado"></canvas>
-          <div class="terrain-3d-toolbar">
-            <button id="terrain-3d-reset" type="button">Recentrar</button>
-            <button id="terrain-3d-expand" type="button" title="Ampliar o cerrar la vista 3D" aria-pressed="false">Ampliar</button>
-            <label data-help="terrain_3d_scale">Relieve
-              <span class="terrain-range"><input id="terrain-3d-scale" type="range" min="50" max="300" value="140" step="10"><b id="terrain-3d-scale-value">140%</b></span>
-            </label>
-            <label class="check"><input id="terrain-3d-wireframe" type="checkbox"> Malla</label>
-          </div>
-          <div id="terrain-3d-status" class="terrain-3d-status">Compila el proyecto para generar la vista 3D.</div>
-        </div>
-        <div id="voxel-3d-view" class="voxel-3d-view" hidden>
-          <canvas id="voxel-3d-canvas" aria-label="Vista Minecraft bloque a bloque del terreno compilado"></canvas>
-          <div class="voxel-3d-toolbar">
-            <button id="voxel-3d-reset" type="button">Recentrar</button>
-            <button id="voxel-3d-expand" type="button" title="Ampliar o cerrar la vista Minecraft" aria-pressed="false">Ampliar</button>
-            <label data-help="voxel_mode">Control<select id="voxel-3d-mode"><option value="orbit">Órbita</option><option value="first-person">Primera persona</option></select></label>
-            <label data-help="voxel_render_distance">Distancia de render<span class="terrain-range"><input id="voxel-render-distance" type="range" min="1" max="16" value="4"><b id="voxel-render-distance-value">4 chunks</b></span></label>
-            <label data-help="voxel_cut_y">Corte vertical<span class="terrain-range"><input id="voxel-cut-y" type="range" min="0" max="159" value="159"><b id="voxel-cut-y-value">Y 159</b></span></label>
-            <label class="check"><input id="voxel-edges" type="checkbox" checked> Bordes de bloque</label>
-            <label class="check"><input id="voxel-water" type="checkbox" checked> Agua</label>
-          </div>
-          <div id="voxel-3d-status" class="terrain-3d-status">Compila el proyecto para generar la vista Minecraft.</div>
-        </div>
-      </div>
-      <div id="download-links" class="download-links"></div>
-    </section>
-
-    <section class="panel compact">
-      <h2>Flujo recomendado</h2>
-      <ol>
-        <li>Límite jugable y regiones.</li>
-        <li>Salidas, caminos, rampas viales y zonas reservadas.</li>
-        <li>Altura base y modificador.</li>
-        <li>Agua, materiales y exclusiones.</li>
-        <li>Activar borde montañoso y preparar margen.</li>
-        <li>Compilar, validar y exportar.</li>
-      </ol>
-    </section>
-  </aside>
-</main>
-
-<script type="module" src="/app.js"></script>
-</body>
+</section></div><div class="dock-tab-panel" hidden="" id="environment-dock-panel" role="tabpanel"><section class="panel mountain-panel environment-panel">
+<div class="panel-title"><h2>Borde montañoso</h2><span class="badge neutral" id="mountain-status">Desactivado</span></div>
+<label class="toggle-row" data-help="mountain_border_enabled"><input id="mountain-border-enabled" type="checkbox"/> Generar cordillera desde Límite jugable</label>
+<div class="form-grid mountain-settings" id="mountain-settings">
+<label data-help="mountain_outer_width">Anchura exterior<input id="mountain-outer-width" max="512" min="4" type="number" value="32"/></label>
+<label data-help="mountain_inner_transition">Transición interior<input id="mountain-inner-transition" max="512" min="2" type="number" value="18"/></label>
+<label data-help="mountain_height">Altura del borde<input id="mountain-height" max="240" min="4" type="number" value="38"/></label>
+<label data-help="mountain_irregularity">Irregularidad %<input id="mountain-irregularity" max="100" min="0" type="number" value="45"/></label>
+<label data-help="mountain_roughness">Rugosidad %<input id="mountain-roughness" max="100" min="0" type="number" value="35"/></label>
+<label data-help="mountain_exit_width">Anchura salidas<input id="mountain-exit-width" max="256" min="4" type="number" value="14"/></label>
+<label class="full" data-help="mountain_exit_transition">Adaptación de salidas<input id="mountain-exit-transition" max="512" min="4" type="number" value="36"/></label>
+</div>
+<label class="toggle-row" data-help="mountain_canvas_guide"><input checked="" id="mountain-canvas-guide" type="checkbox"/> Mostrar contorno y guía en el lienzo</label>
+<details class="compact-details preset-details"><summary>Presets del borde</summary><div class="preset-manager">
+<label data-help="mountain_presets">Preset de borde montañoso<input id="mountain-preset-name" maxlength="40" placeholder="Ej.: Cordillera alta"/></label>
+<div class="preset-actions"><select id="mountain-preset-select"><option value="">Selecciona un preset</option></select><button id="mountain-preset-save" type="button">Guardar</button><button id="mountain-preset-load" type="button">Cargar</button><button class="danger-soft" id="mountain-preset-delete" type="button">Borrar</button></div>
+</div></details>
+<label class="full action-label" data-help="prepare_mountain_margin"><button class="mountain-margin-button" data-tooltip="Reserva automáticamente espacio no jugable para la cordillera." id="prepare-mountain-margin" type="button">Preparar margen automático</button></label>
+<div class="mountain-info" id="mountain-margin-info">Reserva una franja no jugable del mismo ancho que la cordillera.</div>
+</section></div><div class="dock-tab-panel" hidden="" id="compilation-dock-panel" role="tabpanel"><section class="panel compilation-panel">
+<h2>Compilación</h2>
+<div class="form-grid">
+<label data-help="height_modifier_range">Rango modificador<input id="modifier-range" max="128" min="4" type="number" value="32"/></label>
+<label data-help="max_walk_slope">Pendiente transitable<input id="max-walk-slope" max="8" min="0.25" step="0.05" type="number" value="1.75"/></label>
+<label data-help="surface_depth">Profundidad del suelo<input id="surface-depth" max="16" min="1" type="number" value="4"/></label>
+<label class="full" data-help="data_version">DataVersion<input id="data-version" max="100000" min="0" type="number" value="4189"/></label>
+</div>
+<p class="compile-clean-note">Los caminos pintados y las zonas reservadas no cambian la altura. Solo las Rampas viales explícitas modifican el relieve dentro de su corredor.</p>
+<details class="compact-details preset-details"><summary>Presets de compilación</summary><div class="preset-manager">
+<label data-help="compilation_presets">Preset de compilación<input id="compilation-preset-name" maxlength="40" placeholder="Ej.: Caminos suaves"/></label>
+<div class="preset-actions"><select id="compilation-preset-select"><option value="">Selecciona un preset</option></select><button id="compilation-preset-save" type="button">Guardar</button><button id="compilation-preset-load" type="button">Cargar</button><button class="danger-soft" id="compilation-preset-delete" type="button">Borrar</button></div>
+</div></details>
+<div class="budget" id="voxel-budget"></div>
+</section></div></section></aside></main><aside aria-label="Configuración del proyecto" class="drawer project-drawer" hidden="" id="project-drawer"><header class="drawer-header"><div><h2>Proyecto</h2><p>Dimensiones, alturas globales y flujo de trabajo.</p></div><button aria-label="Cerrar configuración del proyecto" class="icon-button" data-close-drawer="project" data-tooltip="Cierra el panel del proyecto." type="button">×</button></header><div class="drawer-scroll"><section class="panel project-panel">
+<div class="panel-title"><h2>Configuración del proyecto</h2></div>
+<div class="form-grid">
+<label data-help="name">Nombre<input id="project-name" maxlength="60" value="mapa_albion"/></label>
+<label data-help="seed">Semilla
+          <span class="input-action-row"><input id="seed" max="2147483647" min="0" type="number" value="123456"/><button aria-label="Generar una semilla aleatoria" data-tooltip="Genera una semilla aleatoria dentro del rango admitido." id="randomize-seed" title="Generar una semilla aleatoria" type="button">🎲</button></span>
+</label>
+<label class="full" data-help="dimension_preset">Dimensión rápida
+          <select id="dimension-preset">
+<option value="32x32">32 × 32</option>
+<option value="64x64">64 × 64</option>
+<option value="128x128">128 × 128</option>
+<option selected="" value="256x256">256 × 256</option>
+<option value="384x384">384 × 384</option>
+<option value="512x512">512 × 512</option>
+<option value="768x768">768 × 768</option>
+<option value="1024x1024">1024 × 1024</option>
+<option value="1536x1536">1536 × 1536</option>
+<option value="2048x2048">2048 × 2048</option>
+<option value="1024x1536">1024 × 1536</option>
+<option value="1536x1024">1536 × 1024</option>
+<option value="custom">Personalizada</option>
+</select>
+</label>
+<label data-help="width">Ancho X<input id="width" max="2048" min="32" step="16" type="number" value="256"/></label>
+<label data-help="length">Largo Z<input id="length" max="2048" min="32" step="16" type="number" value="256"/></label>
+<label data-help="schematic_height">Altura Y<input id="schematic-height" max="320" min="64" type="number" value="160"/></label>
+<label data-help="min_height">Altura mínima<input id="min-height" max="160" min="2" type="number" value="18"/></label>
+<label data-help="max_height">Altura máxima<input id="max-height" max="300" min="12" type="number" value="120"/></label>
+<label data-help="sea_level">Nivel del agua<input id="sea-level" max="250" min="4" type="number" value="46"/></label>
+<button class="full" data-tooltip="Aplica las dimensiones y reconstruye las capas del lienzo." id="apply-dimensions">Aplicar dimensiones</button>
+</div>
+</section><section class="panel workflow-panel">
+<h2>Flujo recomendado</h2>
+<ol>
+<li>Límite jugable y regiones.</li>
+<li>Salidas, caminos, rampas viales y zonas reservadas.</li>
+<li>Altura base y modificador.</li>
+<li>Agua, materiales y exclusiones.</li>
+<li>Activar borde montañoso y preparar margen.</li>
+<li>Compilar, validar y exportar.</li>
+</ol>
+</section></div></aside><aside aria-label="Resultados de compilación" class="results-drawer" hidden="" id="results-drawer"><header class="results-drawer-header"><div><h2>Validación y resultados</h2><span>Compila para actualizar las vistas y archivos.</span></div><button aria-label="Cerrar resultados" class="icon-button" data-close-drawer="results" data-tooltip="Cierra el panel de resultados." type="button">×</button></header><div class="results-drawer-content"><section class="panel validation-panel">
+<div class="panel-title"><h2>Validación</h2><span class="badge neutral" id="validation-status">Sin compilar</span></div>
+<div class="validation-summary" id="validation-summary">Pinta la estructura y compila una vista para revisar salidas, caminos y transitabilidad.</div>
+<div class="issue-list" id="validation-issues"></div>
+</section><section class="panel preview-panel results-panel">
+<h2>Resultados</h2>
+<div class="preview-tabs">
+<button class="active" data-preview="preview">Terreno</button>
+<button data-preview="heightmap">Altura</button>
+<button data-preview="slope">Pendiente</button>
+<button data-preview="walkability">Transitabilidad</button>
+<button data-preview="terrain3d">Vista 3D</button>
+<button data-preview="voxel3d">Vista Minecraft</button>
+</div>
+<div class="preview-frame">
+<img alt="Vista compilada" id="result-preview"/>
+<div class="terrain-3d-view" hidden="" id="terrain-3d-view">
+<canvas aria-label="Vista 3D interactiva del terreno compilado" id="terrain-3d-canvas"></canvas>
+<div class="terrain-3d-toolbar">
+<button data-tooltip="Restablece la cámara de la vista 3D." id="terrain-3d-reset" type="button">Recentrar</button>
+<button aria-pressed="false" data-tooltip="Amplía o devuelve la vista 3D a su panel." id="terrain-3d-expand" title="Ampliar o cerrar la vista 3D" type="button">Ampliar</button>
+<label data-help="terrain_3d_scale">Relieve
+              <span class="terrain-range"><input id="terrain-3d-scale" max="300" min="50" step="10" type="range" value="140"/><b id="terrain-3d-scale-value">140%</b></span>
+</label>
+<label class="check" data-tooltip="Activa o desactiva: Malla."><input id="terrain-3d-wireframe" type="checkbox"/> Malla</label>
+</div>
+<div class="terrain-3d-status" id="terrain-3d-status">Compila el proyecto para generar la vista 3D.</div>
+</div>
+<div class="voxel-3d-view" hidden="" id="voxel-3d-view">
+<canvas aria-label="Vista Minecraft bloque a bloque del terreno compilado" id="voxel-3d-canvas"></canvas>
+<div class="voxel-3d-toolbar">
+<button data-tooltip="Restablece la cámara de la vista Minecraft." id="voxel-3d-reset" type="button">Recentrar</button>
+<button aria-pressed="false" data-tooltip="Amplía o devuelve la vista Minecraft a su panel." id="voxel-3d-expand" title="Ampliar o cerrar la vista Minecraft" type="button">Ampliar</button>
+<label data-help="voxel_mode">Control<select id="voxel-3d-mode"><option value="orbit">Órbita</option><option value="first-person">Primera persona</option></select></label>
+<label data-help="voxel_render_distance">Distancia de render<span class="terrain-range"><input id="voxel-render-distance" type="range" min="1" max="16" value="4"><b id="voxel-render-distance-value">4 chunks</b></span></label>
+<label data-help="voxel_cut_y">Corte vertical<span class="terrain-range"><input id="voxel-cut-y" max="159" min="0" type="range" value="159"/><b id="voxel-cut-y-value">Y 159</b></span></label>
+<label class="check" data-tooltip="Activa o desactiva: Bordes de bloque."><input checked="" id="voxel-edges" type="checkbox"/> Bordes de bloque</label>
+<label class="check" data-tooltip="Activa o desactiva: Agua."><input checked="" id="voxel-water" type="checkbox"/> Agua</label>
+</div>
+<div class="terrain-3d-status" id="voxel-3d-status">Compila el proyecto para generar la vista Minecraft.</div>
+</div>
+</div>
+<div class="download-links" id="download-links"></div>
+</section></div></aside><button aria-label="Cerrar panel abierto" class="ui-backdrop" hidden="" id="ui-backdrop" type="button"></button></div><script src="/ui-shell.js" type="module"></script><script src="/app.js" type="module"></script></body>
 </html>
