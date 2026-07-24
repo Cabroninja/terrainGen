@@ -1,0 +1,115 @@
+{
+  "status": "ok",
+  "dimensions": {
+    "width": 128,
+    "length": 128,
+    "schematic_height": 128,
+    "voxels": 2097152
+  },
+  "detected_exits": [
+    {
+      "source": "marker",
+      "id": "north",
+      "label": "Salida norte",
+      "x": 64,
+      "z": 18,
+      "marker_x": 64,
+      "marker_z": 0
+    },
+    {
+      "source": "marker",
+      "id": "east",
+      "label": "Salida este",
+      "x": 109,
+      "z": 64,
+      "marker_x": 127,
+      "marker_z": 64
+    },
+    {
+      "source": "marker",
+      "id": "south",
+      "label": "Salida sur",
+      "x": 64,
+      "z": 109,
+      "marker_x": 64,
+      "marker_z": 127
+    },
+    {
+      "source": "marker",
+      "id": "west",
+      "label": "Salida oeste",
+      "x": 18,
+      "z": 64,
+      "marker_x": 0,
+      "marker_z": 64
+    }
+  ],
+  "resolved_mountain_exits": [
+    {
+      "id": "north",
+      "label": "Salida norte",
+      "x": 64,
+      "z": 0,
+      "boundary_x": 64,
+      "boundary_z": 18,
+      "inward_x": 0.0,
+      "inward_z": 1.0,
+      "width": 12,
+      "transition": 26
+    },
+    {
+      "id": "east",
+      "label": "Salida este",
+      "x": 127,
+      "z": 64,
+      "boundary_x": 109,
+      "boundary_z": 64,
+      "inward_x": -1.0,
+      "inward_z": 0.0,
+      "width": 12,
+      "transition": 26
+    },
+    {
+      "id": "south",
+      "label": "Salida sur",
+      "x": 64,
+      "z": 127,
+      "boundary_x": 64,
+      "boundary_z": 109,
+      "inward_x": 0.0,
+      "inward_z": -1.0,
+      "width": 12,
+      "transition": 26
+    },
+    {
+      "id": "west",
+      "label": "Salida oeste",
+      "x": 0,
+      "z": 64,
+      "boundary_x": 18,
+      "boundary_z": 64,
+      "inward_x": 1.0,
+      "inward_z": 0.0,
+      "width": 12,
+      "transition": 26
+    }
+  ],
+  "road_components": 1,
+  "maximum_road_step": 5.751,
+  "walkable_ratio": 0.7681,
+  "playable_cells": 8464,
+  "water_cells": 197,
+  "mountain_border": {
+    "enabled": true,
+    "cells": 8553,
+    "strong_cells": 6621,
+    "corridor_cells": 3932
+  },
+  "issues": [
+    {
+      "severity": "warning",
+      "code": "road_step",
+      "message": "El mayor salto continuo del camino es 5.75 bloques."
+    }
+  ]
+}
