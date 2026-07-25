@@ -79,6 +79,7 @@ class RoadRampPoint(BaseModel):
 
 
 class RoadRamp(BaseModel):
+    kind: Literal["road", "terrain"] = "road"
     id: str = Field(min_length=1, max_length=64)
     label: str = Field(default="", max_length=80)
     road_type: Literal["primary", "secondary"] = "primary"
@@ -138,7 +139,7 @@ class StructureCollection(BaseModel):
     id: str = Field(min_length=1, max_length=64)
     label: str = Field(min_length=1, max_length=80)
     category: Literal["tree", "rock"] = "tree"
-    members: list[StructureCollectionMember] = Field(default_factory=list, max_length=128)
+    members: list[StructureCollectionMember] = Field(default_factory=list, max_length=512)
 
 
 class StructurePlacement(BaseModel):
@@ -160,8 +161,8 @@ class ProjectDocument(BaseModel):
     markers: list[Marker] = Field(default_factory=list, max_length=256)
     road_ramps: list[RoadRamp] = Field(default_factory=list, max_length=128)
     water_courses: list[WaterCourse] = Field(default_factory=list, max_length=128)
-    structure_assets: list[StructureAsset] = Field(default_factory=list, max_length=128)
-    structure_collections: list[StructureCollection] = Field(default_factory=list, max_length=64)
+    structure_assets: list[StructureAsset] = Field(default_factory=list, max_length=2048)
+    structure_collections: list[StructureCollection] = Field(default_factory=list, max_length=512)
     structure_placements: list[StructurePlacement] = Field(default_factory=list, max_length=100_000)
 
     @model_validator(mode="after")
@@ -188,7 +189,7 @@ class ProjectDocument(BaseModel):
         for ramp in self.road_ramps:
             for point in ramp.points:
                 if point.x >= self.config.width or point.z >= self.config.length:
-                    raise ValueError(f"La rampa vial {ramp.id} contiene un punto fuera del mapa")
+                    raise ValueError(f"La rampa {'de meseta' if ramp.kind == 'terrain' else 'vial'} {ramp.id} contiene un punto fuera del mapa")
         for course in self.water_courses:
             for point in course.points:
                 if point.x >= self.config.width or point.z >= self.config.length:
@@ -214,6 +215,26 @@ class ProjectDocument(BaseModel):
             if placement.x >= self.config.width or placement.z >= self.config.length:
                 raise ValueError(f"La instancia {placement.id} está fuera del mapa")
         return self
+
+
+class LibraryPresetPayload(BaseModel):
+    values: dict[str, str | int | float | bool | None] = Field(default_factory=dict, max_length=256)
+
+
+class LibraryCollectionCreate(BaseModel):
+    label: str = Field(min_length=1, max_length=80)
+    category: Literal["tree", "rock"] = "tree"
+
+
+class LibraryMemberUpdate(BaseModel):
+    weight: int = Field(default=100, ge=1, le=10_000)
+
+
+class LibraryAssetUpdate(BaseModel):
+    label: str | None = Field(default=None, max_length=80)
+    anchor_x: int | None = Field(default=None, ge=0, le=511)
+    anchor_y: int | None = Field(default=None, ge=0, le=511)
+    anchor_z: int | None = Field(default=None, ge=0, le=511)
 
 
 class CompileRequest(BaseModel):

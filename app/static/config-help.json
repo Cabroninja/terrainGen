@@ -534,13 +534,13 @@
   "brush_presets": {
     "label": "Presets de pincel",
     "category": "Presets",
-    "technical": "Guarda la configuración de la herramienta de meseta y también los controles del pincel de modificador, además de forma, trazo y acumulación.",
-    "plain": "Guarda una meseta o brocha que te guste y recupérala después con un clic.",
+    "technical": "Guarda en la biblioteca central del servidor la configuración de mesetas, rampas, agua, estructuras y pinceles de modificador.",
+    "plain": "Guarda una herramienta que te guste y úsala desde cualquier computador conectado a esta instalación.",
     "low": "Sin preset seleccionado no se modifica ninguna opción.",
     "high": "Puedes guardar varios perfiles para mesetas, caminos o retoques.",
     "minimum": "1 nombre",
-    "maximum": "Según almacenamiento del navegador",
-    "rule": "Los presets quedan en este navegador y dirección del editor; no se incluyen dentro del proyecto guardado."
+    "maximum": "Según espacio disponible en el servidor",
+    "rule": "Los presets son compartidos por todos los navegadores que abren la misma instalación de la aplicación."
   },
   "compilation_presets": {
     "label": "Presets de compilación",
@@ -550,8 +550,8 @@
     "low": "Un preset puede conservar ajustes compactos.",
     "high": "Otro preset puede usar transiciones amplias para mapas grandes.",
     "minimum": "1 nombre",
-    "maximum": "Según almacenamiento del navegador",
-    "rule": "Cargar un preset modifica la configuración actual y marca el proyecto como no guardado."
+    "maximum": "Según espacio disponible en el servidor",
+    "rule": "Los presets se guardan en el servidor y aparecen en cualquier computador conectado a esta instalación."
   },
   "mountain_presets": {
     "label": "Presets de borde montañoso",
@@ -561,8 +561,8 @@
     "low": "Puedes crear un borde bajo y compacto.",
     "high": "Puedes guardar cordilleras profundas para mapas grandes.",
     "minimum": "1 nombre",
-    "maximum": "Según almacenamiento del navegador",
-    "rule": "El preset no modifica la máscara Límite jugable; solo las opciones que se usarán al compilar."
+    "maximum": "Según espacio disponible en el servidor",
+    "rule": "El preset se guarda en el servidor; no modifica la máscara Límite jugable, solo las opciones usadas al compilar."
   },
   "voxel_mode": {
     "label": "Control de la vista Minecraft",
@@ -684,6 +684,17 @@
     "minimum": "Desactivado",
     "maximum": "Activado",
     "rule": "Se recomienda activado para plataformas y medidas exactas."
+  },
+  "plateau_tool_mode": {
+    "label": "Herramienta de altura base",
+    "category": "Altura base",
+    "technical": "Alterna entre el pincel de meseta absoluta y un objeto de rampa de terreno. La rampa usa el mismo perfil geométrico de las rampas viales, pero no escribe valores en la capa Caminos.",
+    "plain": "Elige Meseta para pintar superficies planas o Rampa sin camino para conectar una meseta únicamente modificando el relieve.",
+    "low": "Meseta: fija una altura absoluta dentro de un radio y su transición.",
+    "high": "Rampa sin camino: crea un corredor ascendente o descendente sin material vial.",
+    "minimum": "Meseta",
+    "maximum": "Rampa sin camino",
+    "rule": "Las rampas sin camino se guardan como objetos del proyecto y solo afectan la altura al compilar."
   },
   "plateau_height": {
     "label": "Altura de la meseta",
@@ -1084,13 +1095,13 @@
   "structure_collection": {
     "label": "Colección activa",
     "category": "Estructuras",
-    "technical": "Conjunto ponderado de schematics compatibles usado por el generador aleatorio.",
-    "plain": "Elige qué familia de árboles o rocas vas a pintar.",
+    "technical": "Conjunto ponderado de schematics almacenado en la biblioteca central del servidor y usado por el generador aleatorio.",
+    "plain": "Elige una familia de árboles o rocas disponible para todos los computadores que usan esta instalación.",
     "low": "Una colección con una variante repetirá más su silueta.",
     "high": "Varias variantes con pesos distintos producen mayor diversidad.",
     "minimum": "1 schematic activo",
     "maximum": "128 schematics",
-    "rule": "La colección debe contener al menos un miembro para poder poblar."
+    "rule": "Las colecciones centrales persisten en el volumen de datos del servidor; el proyecto guarda además una copia de los recursos que utiliza."
   },
   "structure_brush_size": {
     "label": "Diámetro del pincel",

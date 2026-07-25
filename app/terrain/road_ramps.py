@@ -113,12 +113,11 @@ def _lateral_influence(
 
 
 def apply_road_ramps(source_height: np.ndarray, painted_roads: np.ndarray, ramps: list[RoadRamp]) -> RoadRampResult:
-    """Apply explicit, bounded road ramps without changing unrelated terrain.
+    """Apply explicit, bounded ramps without changing unrelated terrain.
 
-    The center corridor receives the exact longitudinal ramp height. Its sides
-    either use the original fixed-width transition or an optional adaptive,
-    rounded embankment. Normal painted roads are copied unchanged and never
-    modify height.
+    Every ramp changes height inside its center corridor and configured sides.
+    A ``road`` ramp also paints the road mask; a ``terrain`` ramp leaves road
+    materials untouched so it can connect a plateau naturally.
     """
 
     height = source_height.astype(np.float32, copy=True)
@@ -220,16 +219,20 @@ def apply_road_ramps(source_height: np.ndarray, painted_roads: np.ndarray, ramps
             + target[affected] * influence[affected]
         )
 
-        road_slice = road_mask[z0:z1 + 1, x0:x1 + 1]
-        road_value = 1 if ramp.road_type == "primary" else 2
-        if road_value == 1:
-            road_slice[center] = 1
-        else:
-            road_slice[center & (road_slice == 0)] = 2
+        # Las rampas de terreno modifican únicamente la altura. Las rampas
+        # viales conservan el comportamiento anterior y además pintan camino.
+        if ramp.kind == "road":
+            road_slice = road_mask[z0:z1 + 1, x0:x1 + 1]
+            road_value = 1 if ramp.road_type == "primary" else 2
+            if road_value == 1:
+                road_slice[center] = 1
+            else:
+                road_slice[center & (road_slice == 0)] = 2
 
         summaries.append({
             "id": ramp.id,
             "label": ramp.label,
+            "kind": ramp.kind,
             "length": round(total_length, 3),
             "start_height": round(start_height, 3),
             "end_height": round(end_height, 3),

@@ -1,4 +1,4 @@
-# JKR Terrain Generator v3.3.0
+# JKR Terrain Generator v5.0.0
 
 Reconstrucción completa del generador de terrenos tipo Albion para Minecraft, centrada en un flujo **paint-first**.
 
@@ -9,7 +9,7 @@ La interfaz ya no pinta bloques directamente. Pinta capas independientes y el ba
 - Editor web por capas.
 - Mapas cuadrados o rectangulares.
 - Dimensiones rápidas y personalizadas entre 32 y 2048, siempre múltiplos de 16.
-- Presets reutilizables para pincel, compilación y borde montañoso.
+- Presets reutilizables para herramienta, compilación y borde montañoso, guardados en una biblioteca central del servidor.
 - Herramienta simple de `Altura base`: altura Y absoluta, radio plano, pendiente y soporte exterior opcional.
 - Dos círculos normales para mesetas y un tercer círculo verde solo cuando el soporte exterior está activo.
 - Pincel avanzado conservado en `Modificador de altura` para retoques artísticos.
@@ -27,14 +27,14 @@ La interfaz ya no pinta bloques directamente. Pinta capas independientes y el ba
 - Tooltips propios para cada capa, explicando qué guarda, qué modifica y sus reglas importantes.
 - Compilador de relieve separado de la interfaz.
 - Caminos pintados y zonas reservadas puramente lógicos: no suavizan ni levantan el terreno durante la compilación.
-- Rampas viales explícitas, editables y limitadas a su corredor, con ancho, pendiente longitudinal, descansos y costados opcionalmente suavizados.
+- Rampas viales y rampas naturales de meseta, editables y limitadas a su corredor, con ancho, pendiente longitudinal, descansos y costados opcionalmente suavizados.
 - Suavizado lateral profesional con pendiente 1:X, anchura máxima, redondez y adaptación al terreno, sin deformar el centro transitable.
 - Generador automático de borde montañoso desde la capa Límite jugable.
 - Margen exterior automático, cordillera reproducible y corredores de salida protegidos.
 - Guía del contorno directamente sobre el lienzo.
 - Herramienta de agua reconstruida: masas a pincel y ríos libres suavizados, editables y con altura por celda.
 - Ancho, profundidad, orilla, perfil de ribera, política de cruce vial y salidas de agua entre montañas.
-- Nueva capa virtual **Estructuras** para poblar árboles y rocas desde colecciones de archivos Sponge `.schem`.
+- Nueva capa virtual **Estructuras** para poblar árboles y rocas desde colecciones Sponge `.schem` compartidas por todos los equipos conectados a la misma instalación.
 - Pincel libre de población con diámetro, cantidad hasta 200%, separación mínima desde 0, rotación/reflejo aleatorios y hundimiento.
 - Colecciones con variantes ponderadas, punto de apoyo editable, sello individual y pincel de borrado.
 - Las estructuras se guardan como instancias editables y se convierten en bloques reales tanto en Vista Minecraft como en la exportación final.
@@ -43,10 +43,11 @@ La interfaz ya no pinta bloques directamente. Pinta capas independientes y el ba
 - Botón para generar una semilla aleatoria válida y reproducible.
 - Vista 3D WebGL del terreno compilado, con órbita, zoom, desplazamiento, exageración vertical, agua, marcadores, malla opcional y modo ampliado.
 - Vista Minecraft voxel por chunks de 16×16, con bloques exactos del schematic, bordes, agua, corte Y, órbita, primera persona y distancia de render de hasta 16 chunks.
+- Panel **Validación y resultados** acoplable abajo o a la derecha, con divisores arrastrables para ajustar el lienzo y los visores.
 - Exportación Sponge Schematic v3 `.schem`.
 - Límite preventivo de 750 millones de vóxeles por exportación, con advertencia desde 250 millones y escritura por capas.
 
-Los presets se conservan en el almacenamiento local del navegador para la misma dirección desde la que abres el editor. No alteran el archivo del proyecto hasta que cargas un preset de compilación o de borde y guardas el mapa.
+Los presets y las colecciones de schematics se guardan en la biblioteca central del servidor, dentro del volumen persistente de Docker. Todos los computadores que abran la misma instalación ven la misma biblioteca. La versión v5 comienza limpia y no migra presets antiguos del navegador.
 
 ## Inicio con Docker
 
@@ -83,10 +84,10 @@ En Windows PowerShell, la activación es:
 4. Pulsar **Salida** y hacer un clic cerca del sector deseado; el marcador se ajustará al contorno jugable y aparecerá también en la lista con sus coordenadas.
 5. Pintar la red principal y secundaria; cuando un acceso deba subir a una meseta, crear una **Rampa vial** explícita.
 6. Pintar zonas reservadas para bosses, campamentos o estructuras.
-7. En **Altura base**, elegir la cota Y, el radio plano y la anchura de pendiente; luego pintar las mesetas directamente.
+7. En **Altura base**, pintar las mesetas y usar **Rampa de meseta** cuando necesites una subida natural sin material de camino.
 8. Retocar irregularidades con **Modificador de altura**.
 9. En **Agua**, pintar lagos con **Masa de agua** o mantener clic para dibujar un **Río libre**; marcar como salida cuando deba perderse entre montañas.
-10. En **Estructuras**, crear una colección, importar variantes `.schem` y poblar árboles o rocas con el pincel libre.
+10. En **Estructuras**, crear una colección central, importar variantes `.schem` y poblar árboles o rocas con el pincel libre.
 11. Compilar la vista, revisar la cordillera en **Vista 3D** y comprobar agua, rampas y estructuras en **Vista Minecraft**.
 12. Guardar el proyecto editable y exportar el `.schem`.
 
@@ -113,6 +114,12 @@ El soporte tiene **Anchura** y **Altura** independientes. La anchura controla cu
 **Tomar del terreno** permite copiar la altura base de una coordenada y extender una plataforma existente. La acción **Restaurar altura media** devuelve la zona hacia el valor neutro de Altura base usando la misma pendiente.
 
 El perfil avanzado anterior permanece únicamente en `Modificador de altura`, donde sigue siendo útil para detalles, irregularidades y retoques.
+
+### Rampa de meseta sin camino
+
+En la misma capa **Altura base**, cambia **Herramienta de altura base** a **Rampa de meseta**. Haz clic en el punto inferior, añade puntos intermedios si necesitas una curva y finaliza en el punto superior. Utiliza el mismo editor geométrico de las rampas viales, pero guarda el objeto con `kind: "terrain"`: modifica únicamente la altura y nunca pinta la máscara ni el material de camino.
+
+Las rampas naturales y viales pueden coexistir, editarse, eliminarse y deshacerse de forma independiente. Los proyectos antiguos siguen abriéndose; las rampas sin campo `kind` se interpretan como viales.
 
 
 ## Rampas viales explícitas
@@ -154,12 +161,12 @@ Las masas pintadas y los ríos guardados mantienen configuraciones separadas en 
 
 ## Pincel de árboles y rocas
 
-La capa virtual **Estructuras** no pinta una matriz de bloques. Guarda colecciones, schematics importados e instancias X/Z que se apoyan sobre el terreno final durante cada compilación. Esto permite cambiar posteriormente una meseta, una rampa o una orilla sin volver a poblar: las estructuras conservan su posición horizontal y recalculan su altura.
+La capa virtual **Estructuras** no pinta una matriz de bloques. La biblioteca central del servidor guarda colecciones y schematics; el proyecto guarda las instancias X/Z y una copia de los recursos centrales que realmente utiliza, para conservar su autonomía durante cada compilación. Esto permite cambiar posteriormente una meseta, una rampa o una orilla sin volver a poblar: las estructuras conservan su posición horizontal y recalculan su altura.
 
 Flujo básico:
 
 1. Crear una colección de categoría **Árboles** o **Rocas**.
-2. Importar uno o varios archivos Sponge `.schem`. El archivo queda embebido dentro del proyecto editable.
+2. Importar uno o varios archivos Sponge `.schem`. El archivo queda persistido en el servidor y se incorpora al proyecto cuando se utiliza.
 3. Ajustar el peso de cada variante y, cuando sea necesario, corregir su punto de apoyo X/Y/Z.
 4. Elegir **Poblar**, configurar el diámetro, cantidad, separación, rotación, reflejo y hundimiento.
 5. Mantener clic y arrastrar libremente. Toda la pasada se registra como una sola acción de deshacer.
@@ -177,6 +184,29 @@ Las opciones avanzadas permiten evitar agua, caminos/rampas y zonas reservadas. 
 La rotación utiliza pasos de 90° y transforma también los estados orientables más comunes de Minecraft. El reflejo es opcional. Los bloques de aire del schematic no se colocan, por lo que no borran el terreno ni otras estructuras.
 
 Vista Minecraft carga los bloques estructurales por chunks y la exportación `.schem` utiliza la misma paleta dinámica. Los proyectos anteriores se abren con biblioteca y lista de instancias vacías.
+
+## Biblioteca central del servidor
+
+La instalación dispone de una biblioteca única para:
+
+- Presets de herramienta.
+- Presets de compilación.
+- Presets del borde montañoso.
+- Colecciones de árboles y rocas.
+- Archivos Sponge `.schem`, pesos y puntos de apoyo.
+
+Con Docker se conserva en el volumen `terrain_data`, montado en `/app/data`. Reconstruir o actualizar el contenedor no borra la biblioteca. Ejecutar `docker compose down -v` sí elimina ese volumen y, por tanto, todos los presets y schematics centrales.
+
+Los proyectos no dependen ciegamente de la biblioteca: al guardarlos se incluyen las colecciones locales y los recursos centrales utilizados por sus instancias. Abrir el proyecto en otra instalación conserva esas estructuras, aunque no las publica automáticamente en la biblioteca central de ese otro servidor.
+
+## Panel de resultados acoplable
+
+El panel **Validación y resultados** puede acoplarse:
+
+- **Abajo:** el separador superior controla su altura y reduce el espacio del lienzo.
+- **Derecha:** crea una vista dividida real; el separador lateral controla la anchura y el panel no cubre el lienzo.
+
+El separador interno entre **Validación** y **Resultados** continúa siendo independiente. La aplicación recuerda el modo y las medidas elegidas en ese navegador.
 
 ## Compilación sin ajustes ocultos
 

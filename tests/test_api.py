@@ -9,7 +9,7 @@ def test_health_and_preview_compile():
     health = client.get("/api/health")
     assert health.status_code == 200
     assert health.json()["architecture"] == "paint-first"
-    assert health.json()["version"] == "3.3.0"
+    assert health.json()["version"] == "5.0.0"
 
     response = client.post("/api/compile", json={"project": project_payload(), "export_schematic": False})
     assert response.status_code == 200

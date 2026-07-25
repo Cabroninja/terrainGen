@@ -1,7 +1,7 @@
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
-const STORAGE_KEY = 'jkr-terrain-ui-v4';
+const STORAGE_KEY = 'jkr-terrain-ui-v5';
 
 function readUiState() {
   try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); }
@@ -13,6 +13,301 @@ function writeUiState(patch) {
     const current = readUiState();
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...current, ...patch }));
   } catch (_) { /* La interfaz sigue funcionando sin persistencia. */ }
+}
+
+
+const splitterRefreshers = [];
+
+function refreshResizableSplitters() {
+  requestAnimationFrame(() => splitterRefreshers.forEach((refresh) => refresh()));
+}
+
+function clamp(value, minimum, maximum) {
+  return Math.min(Math.max(value, minimum), maximum);
+}
+
+function bindResizableSplitter({
+  splitterId,
+  containerSelector,
+  getAxis,
+  getStorageKey,
+  getCssVariable,
+  defaultRatio,
+  getMinimums,
+}) {
+  const splitter = document.getElementById(splitterId);
+  const container = document.querySelector(containerSelector);
+  if (!splitter || !container) return;
+
+  let drag = null;
+  let ratio = Number(readUiState()[getStorageKey()]);
+  if (!Number.isFinite(ratio)) ratio = defaultRatio;
+
+  const apply = (nextRatio = ratio) => {
+    if (container.hidden || container.getClientRects().length === 0) return;
+    const axis = getAxis();
+    const rect = container.getBoundingClientRect();
+    const splitterRect = splitter.getBoundingClientRect();
+    const total = axis === 'y'
+      ? rect.height - splitterRect.height
+      : rect.width - splitterRect.width;
+    if (total <= 0) return;
+
+    const { start, end } = getMinimums(axis);
+    const maximumStart = Math.max(start, total - end);
+    const startSize = clamp(total * nextRatio, start, maximumStart);
+    ratio = total ? startSize / total : defaultRatio;
+    container.style.setProperty(getCssVariable(axis), `${Math.round(startSize)}px`);
+    splitter.setAttribute('aria-orientation', axis === 'y' ? 'horizontal' : 'vertical');
+    splitter.setAttribute('aria-valuenow', String(Math.round(ratio * 100)));
+  };
+
+  const finishDrag = () => {
+    if (!drag) return;
+    splitter.releasePointerCapture?.(drag.pointerId);
+    drag = null;
+    document.body.classList.remove('ui-resizing-row', 'ui-resizing-column');
+    writeUiState({ [getStorageKey()]: ratio });
+  };
+
+  splitter.addEventListener('pointerdown', (event) => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    const axis = getAxis();
+    const rect = container.getBoundingClientRect();
+    const splitterRect = splitter.getBoundingClientRect();
+    const total = axis === 'y'
+      ? rect.height - splitterRect.height
+      : rect.width - splitterRect.width;
+    if (total <= 0) return;
+    drag = { pointerId: event.pointerId, axis, rect, total };
+    splitter.setPointerCapture?.(event.pointerId);
+    document.body.classList.add(axis === 'y' ? 'ui-resizing-row' : 'ui-resizing-column');
+  });
+
+  splitter.addEventListener('pointermove', (event) => {
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const pointerPosition = drag.axis === 'y' ? event.clientY - drag.rect.top : event.clientX - drag.rect.left;
+    apply(pointerPosition / drag.total);
+  });
+
+  splitter.addEventListener('pointerup', finishDrag);
+  splitter.addEventListener('pointercancel', finishDrag);
+  splitter.addEventListener('lostpointercapture', finishDrag);
+
+  splitter.addEventListener('keydown', (event) => {
+    const axis = getAxis();
+    const decrease = axis === 'y' ? event.key === 'ArrowUp' : event.key === 'ArrowLeft';
+    const increase = axis === 'y' ? event.key === 'ArrowDown' : event.key === 'ArrowRight';
+    if (!decrease && !increase && event.key !== 'Home' && event.key !== 'End') return;
+    event.preventDefault();
+    if (event.key === 'Home') ratio = 0.18;
+    else if (event.key === 'End') ratio = 0.82;
+    else ratio += decrease ? -0.03 : 0.03;
+    apply(ratio);
+    writeUiState({ [getStorageKey()]: ratio });
+  });
+
+  const refresh = () => {
+    const stored = Number(readUiState()[getStorageKey()]);
+    if (Number.isFinite(stored)) ratio = stored;
+    apply(ratio);
+  };
+  splitterRefreshers.push(refresh);
+  refresh();
+}
+
+
+function getResultsDockMode() {
+  return document.body.classList.contains('results-dock-right') ? 'right' : 'bottom';
+}
+
+function notifyViewportResize() {
+  requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));
+}
+
+function setResultsDock(mode, persist = true) {
+  const compact = matchMedia('(max-width: 900px)').matches;
+  const requested = mode === 'right' ? 'right' : 'bottom';
+  const resolved = compact && requested === 'right' ? 'bottom' : requested;
+
+  document.body.classList.toggle('results-dock-right', resolved === 'right');
+  document.body.classList.toggle('results-dock-bottom', resolved === 'bottom');
+  $$('[data-results-dock]').forEach((button) => {
+    const active = button.dataset.resultsDock === resolved;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-pressed', String(active));
+    button.disabled = compact && button.dataset.resultsDock === 'right';
+  });
+
+  if (persist) writeUiState({ resultsDock: requested });
+  refreshResizableSplitters();
+  notifyViewportResize();
+}
+
+function bindResultsDrawerSize() {
+  const splitter = document.getElementById('results-drawer-resizer');
+  const drawer = document.getElementById('results-drawer');
+  if (!splitter || !drawer) return;
+
+  let height = Number(readUiState().resultsDrawerHeight);
+  let width = Number(readUiState().resultsDrawerWidth);
+  let drag = null;
+
+  const topbarHeight = () => parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--ui-topbar-height')) || 42;
+  const minimumHeight = () => matchMedia('(max-width: 700px)').matches ? 240 : 180;
+  const maximumHeight = () => Math.max(minimumHeight(), window.innerHeight - topbarHeight() - 18);
+  const defaultHeight = () => Math.min(window.innerHeight * (matchMedia('(max-width: 700px)').matches ? 0.70 : 0.52), 520);
+  const minimumWidth = () => Math.min(380, Math.max(300, window.innerWidth * 0.30));
+  const maximumWidth = () => Math.max(minimumWidth(), window.innerWidth - 520);
+  const defaultWidth = () => Math.min(window.innerWidth * 0.44, 720);
+
+  const apply = () => {
+    const mode = getResultsDockMode();
+    if (mode === 'right') {
+      const resolved = Number.isFinite(width) ? width : defaultWidth();
+      width = clamp(resolved, minimumWidth(), maximumWidth());
+      document.documentElement.style.setProperty('--ui-results-drawer-width', `${Math.round(width)}px`);
+      splitter.setAttribute('aria-orientation', 'vertical');
+      splitter.setAttribute('aria-label', 'Cambiar anchura del panel de validación y resultados');
+      splitter.setAttribute('aria-valuemin', String(Math.round(minimumWidth())));
+      splitter.setAttribute('aria-valuemax', String(Math.round(maximumWidth())));
+      splitter.setAttribute('aria-valuenow', String(Math.round(width)));
+      splitter.setAttribute('aria-valuetext', `${Math.round(width)} píxeles de ancho`);
+    } else {
+      const resolved = Number.isFinite(height) ? height : defaultHeight();
+      height = clamp(resolved, minimumHeight(), maximumHeight());
+      document.documentElement.style.setProperty('--ui-results-drawer-height', `${Math.round(height)}px`);
+      splitter.setAttribute('aria-orientation', 'horizontal');
+      splitter.setAttribute('aria-label', 'Cambiar altura del panel de validación y resultados');
+      splitter.setAttribute('aria-valuemin', String(Math.round(minimumHeight())));
+      splitter.setAttribute('aria-valuemax', String(Math.round(maximumHeight())));
+      splitter.setAttribute('aria-valuenow', String(Math.round(height)));
+      splitter.setAttribute('aria-valuetext', `${Math.round(height)} píxeles de alto`);
+    }
+  };
+
+  const finishDrag = () => {
+    if (!drag) return;
+    splitter.releasePointerCapture?.(drag.pointerId);
+    const mode = drag.mode;
+    drag = null;
+    document.body.classList.remove('ui-resizing-results-drawer-row', 'ui-resizing-results-drawer-column');
+    if (mode === 'right') writeUiState({ resultsDrawerWidth: Math.round(width) });
+    else writeUiState({ resultsDrawerHeight: Math.round(height) });
+    notifyViewportResize();
+  };
+
+  splitter.addEventListener('pointerdown', (event) => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    const mode = getResultsDockMode();
+    const rect = drawer.getBoundingClientRect();
+    drag = {
+      pointerId: event.pointerId,
+      mode,
+      startX: event.clientX,
+      startY: event.clientY,
+      startWidth: rect.width,
+      startHeight: rect.height,
+    };
+    splitter.setPointerCapture?.(event.pointerId);
+    document.body.classList.add(mode === 'right' ? 'ui-resizing-results-drawer-column' : 'ui-resizing-results-drawer-row');
+  });
+
+  splitter.addEventListener('pointermove', (event) => {
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    if (drag.mode === 'right') width = drag.startWidth + (drag.startX - event.clientX);
+    else height = drag.startHeight + (drag.startY - event.clientY);
+    apply();
+    notifyViewportResize();
+  });
+
+  splitter.addEventListener('pointerup', finishDrag);
+  splitter.addEventListener('pointercancel', finishDrag);
+  splitter.addEventListener('lostpointercapture', finishDrag);
+
+  splitter.addEventListener('keydown', (event) => {
+    const mode = getResultsDockMode();
+    const step = event.shiftKey ? 80 : 24;
+    const validKeys = mode === 'right'
+      ? ['ArrowLeft', 'ArrowRight', 'Home', 'End']
+      : ['ArrowUp', 'ArrowDown', 'Home', 'End'];
+    if (!validKeys.includes(event.key)) return;
+    event.preventDefault();
+
+    if (mode === 'right') {
+      if (event.key === 'ArrowLeft') width += step;
+      else if (event.key === 'ArrowRight') width -= step;
+      else if (event.key === 'Home') width = minimumWidth();
+      else width = maximumWidth();
+      apply();
+      writeUiState({ resultsDrawerWidth: Math.round(width) });
+    } else {
+      if (event.key === 'ArrowUp') height += step;
+      else if (event.key === 'ArrowDown') height -= step;
+      else if (event.key === 'Home') height = minimumHeight();
+      else height = maximumHeight();
+      apply();
+      writeUiState({ resultsDrawerHeight: Math.round(height) });
+    }
+    notifyViewportResize();
+  });
+
+  splitter.addEventListener('dblclick', () => {
+    if (getResultsDockMode() === 'right') {
+      width = defaultWidth();
+      apply();
+      writeUiState({ resultsDrawerWidth: Math.round(width) });
+    } else {
+      height = defaultHeight();
+      apply();
+      writeUiState({ resultsDrawerHeight: Math.round(height) });
+    }
+    notifyViewportResize();
+  });
+
+  const refresh = () => {
+    const state = readUiState();
+    const storedHeight = Number(state.resultsDrawerHeight);
+    const storedWidth = Number(state.resultsDrawerWidth);
+    if (Number.isFinite(storedHeight)) height = storedHeight;
+    if (Number.isFinite(storedWidth)) width = storedWidth;
+    apply();
+  };
+  splitterRefreshers.push(refresh);
+  refresh();
+}
+
+function bindResizableSplitters() {
+  bindResizableSplitter({
+    splitterId: 'inspector-splitter',
+    containerSelector: '#inspector-dock',
+    getAxis: () => 'y',
+    getStorageKey: () => 'inspectorSplitRatio',
+    getCssVariable: () => '--ui-inspector-navigation-size',
+    defaultRatio: 0.40,
+    getMinimums: () => ({ start: 110, end: 125 }),
+  });
+
+  const compactResults = matchMedia('(max-width: 700px)');
+  bindResizableSplitter({
+    splitterId: 'results-splitter',
+    containerSelector: '#results-drawer .results-drawer-content',
+    getAxis: () => getResultsDockMode() === 'right' || compactResults.matches ? 'y' : 'x',
+    getStorageKey: () => {
+      if (getResultsDockMode() === 'right') return 'resultsSplitRatioRight';
+      return compactResults.matches ? 'resultsSplitRatioMobile' : 'resultsSplitRatioDesktop';
+    },
+    getCssVariable: (axis) => axis === 'y' ? '--ui-validation-height' : '--ui-validation-width',
+    defaultRatio: getResultsDockMode() === 'right' ? 0.24 : (compactResults.matches ? 0.25 : 0.22),
+    getMinimums: (axis) => axis === 'y'
+      ? ({ start: 90, end: getResultsDockMode() === 'right' ? 280 : 220 })
+      : ({ start: 170, end: 300 }),
+  });
+  compactResults.addEventListener?.('change', refreshResizableSplitters);
+  bindResultsDrawerSize();
+  addEventListener('resize', refreshResizableSplitters);
 }
 
 function setTab(group, targetId, persist = true) {
@@ -52,6 +347,7 @@ function setProjectOpen(open) {
   document.body.classList.toggle('project-open', open);
   buttons.forEach((button) => button.setAttribute('aria-pressed', String(open)));
   updateBackdrop();
+  refreshResizableSplitters();
   if (open) drawer.querySelector('input, select, button')?.focus({ preventScroll: true });
 }
 
@@ -64,6 +360,7 @@ function setResultsOpen(open) {
   buttons.forEach((button) => button.setAttribute('aria-pressed', String(open)));
   writeUiState({ resultsOpen: open });
   updateBackdrop();
+  refreshResizableSplitters();
 }
 
 function setInspectorCollapsed(collapsed, persist = true) {
@@ -73,6 +370,7 @@ function setInspectorCollapsed(collapsed, persist = true) {
   buttons.forEach((button) => button.setAttribute('aria-pressed', String(!collapsed)));
   if (persist) writeUiState({ inspectorCollapsed: collapsed });
   updateBackdrop();
+  refreshResizableSplitters();
 }
 
 function updateBackdrop() {
@@ -92,6 +390,7 @@ function bindShellActions() {
   $$('[data-ui-action="project"]').forEach((button) => button.addEventListener('click', () => setProjectOpen(!document.body.classList.contains('project-open'))));
   $$('[data-ui-action="results"]').forEach((button) => button.addEventListener('click', () => setResultsOpen(!document.body.classList.contains('results-open'))));
   $$('[data-ui-action="inspector"]').forEach((button) => button.addEventListener('click', () => setInspectorCollapsed(!document.body.classList.contains('inspector-collapsed'))));
+  $$('[data-results-dock]').forEach((button) => button.addEventListener('click', () => setResultsDock(button.dataset.resultsDock)));
   $$('[data-close-drawer="project"]').forEach((button) => button.addEventListener('click', () => setProjectOpen(false)));
   $$('[data-close-drawer="results"]').forEach((button) => button.addEventListener('click', () => setResultsOpen(false)));
   $('#ui-backdrop')?.addEventListener('click', closeTransientPanels);
@@ -118,14 +417,20 @@ function bindShellActions() {
 
   const state = readUiState();
   const mobile = matchMedia('(max-width: 900px)').matches;
+  setResultsDock(state.resultsDock || 'bottom', false);
   setInspectorCollapsed(mobile ? true : Boolean(state.inspectorCollapsed), false);
   setResultsOpen(Boolean(state.resultsOpen));
   setProjectOpen(false);
 
   const media = matchMedia('(max-width: 900px)');
   media.addEventListener?.('change', (event) => {
-    if (event.matches) setInspectorCollapsed(true, false);
-    else setInspectorCollapsed(Boolean(readUiState().inspectorCollapsed), false);
+    if (event.matches) {
+      setInspectorCollapsed(true, false);
+      setResultsDock('bottom', false);
+    } else {
+      setInspectorCollapsed(Boolean(readUiState().inspectorCollapsed), false);
+      setResultsDock(readUiState().resultsDock || 'bottom', false);
+    }
   });
 }
 
@@ -147,7 +452,7 @@ function createSegmentedControl(select) {
       button.className = 'segment-button';
       button.dataset.value = option.value;
       button.textContent = option.textContent;
-      button.title = `Selecciona: ${option.textContent}`;
+      button.setAttribute('aria-label', `Selecciona: ${option.textContent}`);
       const active = select.value === option.value;
       button.classList.toggle('active', active);
       button.setAttribute('aria-pressed', String(active));
@@ -179,7 +484,7 @@ function createSegmentedControl(select) {
 
 function enhanceToolSelectors() {
   const ids = [
-    'plateau-action', 'road-tool-mode', 'water-tool-mode', 'water-mass-action',
+    'plateau-tool-mode', 'plateau-action', 'road-tool-mode', 'water-tool-mode', 'water-mass-action',
     'structure-tool-mode', 'brush-action',
   ];
   ids.forEach((id) => createSegmentedControl(document.getElementById(id)));
@@ -225,6 +530,7 @@ function labelIconButtons() {
 }
 
 bindTabs();
+bindResizableSplitters();
 bindShellActions();
 enhanceToolSelectors();
 observeEditorState();
