@@ -161,6 +161,20 @@ class StructurePlacement(BaseModel):
     sink: int = Field(default=0, ge=0, le=32)
 
 
+class ReferenceImage(BaseModel):
+    name: str = Field(default="referencia", max_length=160)
+    data_url: str = Field(min_length=32, max_length=30_000_000, pattern=r"^data:image/(png|jpeg|webp);base64,")
+    x: float = Field(default=0.0, ge=-8192.0, le=8192.0)
+    z: float = Field(default=0.0, ge=-8192.0, le=8192.0)
+    fit_width: float = Field(default=1.0, gt=0.0, le=8192.0)
+    fit_height: float = Field(default=1.0, gt=0.0, le=8192.0)
+    scale: float = Field(default=1.0, ge=0.1, le=5.0)
+    rotation: float = Field(default=0.0, ge=-180.0, le=180.0)
+    opacity: float = Field(default=0.4, ge=0.0, le=1.0)
+    visible: bool = True
+    locked: bool = False
+
+
 class ProjectDocument(BaseModel):
     format: Literal["jkr-terrain-project"] = "jkr-terrain-project"
     version: Literal[2] = 2
@@ -172,6 +186,7 @@ class ProjectDocument(BaseModel):
     structure_assets: list[StructureAsset] = Field(default_factory=list, max_length=2048)
     structure_collections: list[StructureCollection] = Field(default_factory=list, max_length=512)
     structure_placements: list[StructurePlacement] = Field(default_factory=list, max_length=100_000)
+    reference_image: ReferenceImage | None = None
 
     @model_validator(mode="after")
     def validate_project(self) -> "ProjectDocument":

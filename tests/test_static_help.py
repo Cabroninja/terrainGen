@@ -216,3 +216,23 @@ def test_mass_water_settings_are_isolated_from_river_editing():
     assert "this.riverWaterSettings" in javascript
     assert "const massWater = this.massWaterSettings" in javascript
     assert "shore_width: massWater.shoreWidth" in javascript
+
+
+
+def test_reference_image_editor_is_present_and_saved_only_in_project():
+    root = Path(__file__).parents[1] / "app" / "static"
+    html = (root / "index.html").read_text(encoding="utf-8")
+    javascript = (root / "app.js").read_text(encoding="utf-8")
+    styles = (root / "styles.css").read_text(encoding="utf-8")
+    for control in (
+        "reference-canvas", "reference-dock-panel", "reference-image-file",
+        "reference-visible", "reference-locked", "reference-edit-mode",
+        "reference-opacity", "reference-scale", "reference-rotation",
+        "reference-position-x", "reference-position-z", "reference-fit",
+        "reference-center", "reference-reset", "reference-remove",
+    ):
+        assert f'id="{control}"' in html
+    assert "reference_image = this.referenceSnapshot()" in javascript
+    assert "this.projectDocument(false)" in javascript
+    assert "beginReferenceDrag" in javascript
+    assert "#reference-canvas" in styles

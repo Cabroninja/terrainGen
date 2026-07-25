@@ -688,13 +688,13 @@
   "plateau_tool_mode": {
     "label": "Herramienta de altura base",
     "category": "Altura base",
-    "technical": "Alterna entre el pincel de meseta absoluta y un objeto de rampa de terreno. La rampa usa el mismo perfil geométrico de las rampas viales, pero no escribe valores en la capa Caminos.",
-    "plain": "Elige Meseta para pintar superficies planas o Rampa sin camino para conectar una meseta únicamente modificando el relieve.",
-    "low": "Meseta: fija una altura absoluta dentro de un radio y su transición.",
-    "high": "Rampa sin camino: crea un corredor ascendente o descendente sin material vial.",
-    "minimum": "Meseta",
-    "maximum": "Rampa sin camino",
-    "rule": "Las rampas sin camino se guardan como objetos del proyecto y solo afectan la altura al compilar."
+    "technical": "Alterna entre el pincel de meseta absoluta, la selección de mesetas editables y los objetos de rampa de terreno. Seleccionar meseta carga los mismos parámetros con los que fue creada para regenerarla sin volver a dibujar.",
+    "plain": "Pinta una meseta nueva, selecciona una meseta creada con esta versión para cambiar su altura, radio, pendiente o soporte, o crea una rampa sin camino.",
+    "low": "Pintar meseta: crea una superficie usando los parámetros actuales.",
+    "high": "Rampa de meseta: conecta alturas sin escribir caminos.",
+    "minimum": "Pintar meseta",
+    "maximum": "Rampa de meseta",
+    "rule": "Las mesetas anteriores a esta actualización permanecen integradas en la capa. Las mesetas nuevas se guardan como objetos editables."
   },
   "plateau_height": {
     "label": "Altura de la meseta",
@@ -1270,5 +1270,64 @@
     "low": "Vertical o 1:8: caída casi recta y poca excavación hacia el interior.",
     "high": "1:2: garganta mucho más retraída dentro de la meseta, adecuada cuando quieres una cascada inclinada y profunda.",
     "rule": "Este parámetro solo modifica la cavidad y la caída de las cascadas. No cambia la pendiente del cauce normal ni el recorrido dibujado."
+  },
+  "reference_visible": {
+    "label": "Mostrar imagen de referencia",
+    "category": "Imagen de referencia",
+    "technical": "Activa o desactiva el renderizado de la imagen guía sobre el lienzo 2D.",
+    "plain": "Oculta temporalmente la referencia sin eliminarla del proyecto.",
+    "rule": "No afecta la compilación, validación ni exportación del schematic."
+  },
+  "reference_locked": {
+    "label": "Bloquear imagen de referencia",
+    "category": "Imagen de referencia",
+    "technical": "Impide modificar la posición de la imagen mediante arrastre directo sobre el lienzo.",
+    "plain": "Bloquéala cuando termines de alinearla para no moverla accidentalmente.",
+    "rule": "Los campos numéricos también quedan protegidos mientras está bloqueada."
+  },
+  "reference_edit_mode": {
+    "label": "Mover directamente sobre el lienzo",
+    "category": "Imagen de referencia",
+    "technical": "Reserva temporalmente la interacción del lienzo para trasladar la referencia en coordenadas X/Z.",
+    "plain": "Actívalo, arrastra la imagen hasta alinearla y luego desactívalo para volver a pintar.",
+    "rule": "Mientras este modo está activo no se aplican pinceladas al terreno."
+  },
+  "reference_opacity": {
+    "label": "Opacidad de la referencia",
+    "category": "Imagen de referencia",
+    "technical": "Controla la transparencia visual de la imagen guía entre 0 y 100 %.",
+    "plain": "Bájala para ver claramente las capas que estás pintando encima.",
+    "minimum": "0 % (invisible)",
+    "maximum": "100 % (opaca)",
+    "rule": "Un valor entre 25 % y 50 % suele funcionar bien para calcar."
+  },
+  "reference_scale": {
+    "label": "Escala de la referencia",
+    "category": "Imagen de referencia",
+    "technical": "Multiplica proporcionalmente el ancho y alto de ajuste de la imagen.",
+    "plain": "100 % conserva el tamaño obtenido al ajustar; valores mayores agrandan la imagen.",
+    "minimum": "10 %",
+    "maximum": "500 %",
+    "rule": "La proporción original de la imagen siempre se conserva."
+  },
+  "reference_rotation": {
+    "label": "Rotación de la referencia",
+    "category": "Imagen de referencia",
+    "technical": "Rota la imagen alrededor de su centro en grados.",
+    "plain": "Úsalo para alinear planos o bosquejos que estén levemente inclinados.",
+    "minimum": "-180°",
+    "maximum": "180°"
+  },
+  "reference_position_x": {
+    "label": "Posición X de la referencia",
+    "category": "Imagen de referencia",
+    "technical": "Coordenada horizontal del centro de la imagen dentro del mapa.",
+    "plain": "Aumenta el valor para mover la imagen hacia la derecha."
+  },
+  "reference_position_z": {
+    "label": "Posición Z de la referencia",
+    "category": "Imagen de referencia",
+    "technical": "Coordenada vertical del centro de la imagen dentro del mapa.",
+    "plain": "Aumenta el valor para mover la imagen hacia abajo en el lienzo."
   }
 }

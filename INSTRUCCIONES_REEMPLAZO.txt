@@ -1,9 +1,17 @@
-Parche v5.3.2 — Inclinación de cascadas
+JKR Terrain Generator v5.5.0 — Mesetas editables
 
-El ZIP no contiene una carpeta exterior adicional.
-Descomprime directamente en la raíz del proyecto:
+Este ZIP no tiene carpeta contenedora adicional.
+Descomprímelo desde la raíz del proyecto:
 
-unzip -o JKR-Terrain-Generator-v5.3.2-INCLINACION-CASCADA-PARCHE.zip
-docker compose up -d --build
+  unzip -o JKR-Terrain-Generator-v5.5.0-MESETAS-EDITABLES-PARCHE.zip
+  docker compose up -d --build
 
-Luego recarga el navegador con Ctrl + F5.
+Después recarga la aplicación con Ctrl + F5.
+
+Archivos reemplazados:
+- app/static/app.js
+- app/static/plateau-tool.js
+- app/static/index.html
+- app/static/styles.css
+- app/static/config-help.json
+- tests/test_plateau_tool.py

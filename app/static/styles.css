@@ -2616,3 +2616,93 @@ body.ui-resizing-results-drawer * {
     grid-template-columns: 1fr;
   }
 }
+
+
+/* =========================================================
+   v5.4 · Imagen de referencia del lienzo
+   ========================================================= */
+#reference-canvas {
+  pointer-events: none;
+  image-rendering: auto;
+}
+
+.reference-panel {
+  display: grid;
+  align-content: start;
+  gap: 7px;
+}
+
+.reference-intro {
+  margin: 0;
+  color: var(--ui-muted);
+  font-size: 10.5px;
+  line-height: 1.4;
+}
+
+.reference-upload-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 5px;
+}
+
+.reference-upload-row .button-like,
+.reference-upload-row button {
+  min-width: 0;
+  height: 27px;
+}
+
+.reference-controls {
+  display: grid;
+  gap: 6px;
+}
+
+.reference-range-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 42px;
+  align-items: center;
+  gap: 6px;
+}
+
+.reference-range-row input[type="range"] {
+  min-width: 0;
+  width: 100%;
+}
+
+.reference-range-row output {
+  color: var(--ui-text);
+  font-size: 10px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.reference-edit-toggle {
+  border: 1px solid #3b5250;
+  border-radius: 3px;
+  padding: 5px 6px;
+  background: #20302f;
+}
+
+.reference-actions {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.reference-actions button {
+  min-width: 0;
+  padding-inline: 5px;
+  font-size: 10px;
+}
+
+.reference-info {
+  overflow-wrap: anywhere;
+}
+
+body.reference-editing #overlay-canvas {
+  cursor: grab;
+}
+
+body.reference-dragging #overlay-canvas {
+  cursor: grabbing;
+}
+
+.plateau-selection-actions { display: grid; gap: 6px; margin-top: 6px; }
+.plateau-selection-actions .support-note { margin: 0; }
