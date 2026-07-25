@@ -2,7 +2,7 @@ import { initializeHelp } from './config-help.js';
 import { Terrain3DViewer } from './terrain-viewer.js';
 import { VoxelTerrainViewer } from './voxel-viewer.js';
 import { normalizeElevationProfile, elevationProfileInfluence } from './brush-profile.js';
-import { normalizePlateauSettings, plateauInfluence, heightToLayerValue, layerValueToHeight } from './plateau-tool.js';
+import { normalizePlateauSettings, plateauInfluence, heightToLayerValue, layerValueToHeight, normalizePlateauObject, rasterizePlateauObjects, plateauObjectContainsPoint } from './plateau-tool.js';
 import { normalizeRoadRampSettings, analyzeRoadRamp } from './road-ramp-tool.js';
 import { normalizeWaterSettings, smoothFreehandCourse, courseLength } from './water-course-tool.js';
 import { normalizeStructureSettings, estimateStructureCount, weightedMember, pointInsideRamp, pointSegmentDistance } from './structure-tool.js';
@@ -31,6 +31,10 @@ function createMarkerId() {
 
 function createRoadRampId() {
   return `ramp-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function createPlateauId() {
+  return `plateau-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
 function createWaterCourseId() {
@@ -77,7 +81,7 @@ const ACTIONS = {
 const PRESET_GROUPS = {
   brush: {
     label: 'pincel', storageKey: 'jkr-terrain-presets-brush-v1',
-    fields: [['plateau-tool-mode', 'value'], ['plateau-height', 'value'], ['plateau-radius', 'value'], ['plateau-slope-width', 'value'], ['plateau-support-enabled', 'checked'], ['plateau-support-width', 'value'], ['plateau-support-height', 'value'], ['plateau-action', 'value'], ['road-tool-mode', 'value'], ['road-ramp-type', 'value'], ['road-ramp-width', 'value'], ['road-ramp-shoulder', 'value'], ['road-ramp-ratio', 'value'], ['road-ramp-start-landing', 'value'], ['road-ramp-end-landing', 'value'], ['road-ramp-smooth-sides', 'checked'], ['road-ramp-side-ratio', 'value'], ['road-ramp-max-side-width', 'value'], ['road-ramp-side-roundness', 'value'], ['road-ramp-follow-terrain', 'checked'], ['water-tool-mode', 'value'], ['water-mass-action', 'value'], ['water-width', 'value'], ['water-depth', 'value'], ['water-shore-width', 'value'], ['water-shore-profile', 'value'], ['water-road-policy', 'value'], ['water-course-smoothing', 'value'], ['water-course-exit', 'checked'], ['structure-tool-mode', 'value'], ['structure-collection-select', 'value'], ['structure-brush-size', 'value'], ['structure-density', 'value'], ['structure-spacing', 'value'], ['structure-sink', 'value'], ['structure-random-rotation', 'checked'], ['structure-random-mirror', 'checked'], ['structure-avoid-water', 'checked'], ['structure-avoid-roads', 'checked'], ['structure-avoid-reserved', 'checked'], ['brush-size', 'value'], ['brush-core-mode', 'checked'], ['brush-core-radius', 'value'], ['brush-hardness', 'value'], ['elevation-profile-enabled', 'checked'], ['brush-slope-width', 'value'], ['brush-base-enabled', 'checked'], ['brush-base-width', 'value'], ['brush-base-intensity', 'value'], ['brush-profile-shape', 'value'], ['brush-terrace-steps', 'value'], ['brush-strict-clip', 'checked'], ['brush-opacity', 'value'], ['brush-strength', 'value'], ['brush-shape', 'value'], ['stroke-mode', 'value'], ['stroke-accumulation', 'checked']],
+    fields: [['plateau-tool-mode', 'value'], ['plateau-height', 'value'], ['plateau-radius', 'value'], ['plateau-slope-width', 'value'], ['plateau-support-enabled', 'checked'], ['plateau-support-width', 'value'], ['plateau-support-height', 'value'], ['plateau-action', 'value'], ['road-tool-mode', 'value'], ['road-ramp-type', 'value'], ['road-ramp-width', 'value'], ['road-ramp-shoulder', 'value'], ['road-ramp-ratio', 'value'], ['road-ramp-start-landing', 'value'], ['road-ramp-end-landing', 'value'], ['road-ramp-smooth-sides', 'checked'], ['road-ramp-side-ratio', 'value'], ['road-ramp-max-side-width', 'value'], ['road-ramp-side-roundness', 'value'], ['road-ramp-follow-terrain', 'checked'], ['water-tool-mode', 'value'], ['water-mass-action', 'value'], ['water-width', 'value'], ['water-depth', 'value'], ['water-shore-width', 'value'], ['water-shore-profile', 'value'], ['water-road-policy', 'value'], ['water-river-style', 'value'], ['water-cascade-incline', 'value'], ['water-course-smoothing', 'value'], ['water-course-exit', 'checked'], ['structure-tool-mode', 'value'], ['structure-collection-select', 'value'], ['structure-brush-size', 'value'], ['structure-density', 'value'], ['structure-spacing', 'value'], ['structure-sink', 'value'], ['structure-random-rotation', 'checked'], ['structure-random-mirror', 'checked'], ['structure-avoid-water', 'checked'], ['structure-avoid-roads', 'checked'], ['structure-avoid-reserved', 'checked'], ['brush-size', 'value'], ['brush-core-mode', 'checked'], ['brush-core-radius', 'value'], ['brush-hardness', 'value'], ['elevation-profile-enabled', 'checked'], ['brush-slope-width', 'value'], ['brush-base-enabled', 'checked'], ['brush-base-width', 'value'], ['brush-base-intensity', 'value'], ['brush-profile-shape', 'value'], ['brush-terrace-steps', 'value'], ['brush-strict-clip', 'checked'], ['brush-opacity', 'value'], ['brush-strength', 'value'], ['brush-shape', 'value'], ['stroke-mode', 'value'], ['stroke-accumulation', 'checked']],
   },
   compilation: {
     label: 'compilación', storageKey: 'jkr-terrain-presets-compilation-v1',
@@ -117,14 +121,34 @@ function downloadJson(filename, data) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.addEventListener('load', () => resolve(String(reader.result || '')));
+    reader.addEventListener('error', () => reject(new Error('No se pudo leer la imagen.')));
+    reader.readAsDataURL(file);
+  });
+}
+
+function loadReferenceImage(dataUrl) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.addEventListener('load', () => resolve(image), { once: true });
+    image.addEventListener('error', () => reject(new Error('La imagen de referencia no es válida.')), { once: true });
+    image.src = dataUrl;
+  });
+}
+
 class TerrainEditor {
   constructor(help) {
     this.help = help;
-    this.canvas = $('terrain-canvas'); this.overlay = $('overlay-canvas');
-    this.ctx = this.canvas.getContext('2d', { alpha: false }); this.overlayCtx = this.overlay.getContext('2d');
+    this.canvas = $('terrain-canvas'); this.referenceCanvas = $('reference-canvas'); this.overlay = $('overlay-canvas');
+    this.ctx = this.canvas.getContext('2d', { alpha: false }); this.referenceCtx = this.referenceCanvas.getContext('2d'); this.overlayCtx = this.overlay.getContext('2d');
     this.width = 256; this.length = 256; this.layers = {}; this.visibility = {}; this.locked = {};
     this.activeLayer = 'height_base'; this.undoStack = []; this.redoStack = []; this.maxHistory = 80;
     this.currentChanges = null; this.strokeBaseValues = null; this.strokeInfluence = null; this.pointerDown = false; this.lineStart = null; this.hover = null; this.renderQueued = false;
+    this.referenceGuide = null; this.referenceImage = null; this.referenceDragging = false; this.referenceDragStart = null;
+    this.plateauBaseLayer = null; this.plateauObjects = []; this.plateauStrokePoints = []; this.plateauStrokeSettings = null; this.plateauObjectsBeforeStroke = null; this.plateauBaseChanges = null; this.selectedPlateauId = null;
     this.markerTool = null; this.plateauPickHeight = false; this.markers = []; this.roadRamps = []; this.roadRampDraft = []; this.roadRampDraftKind = null; this.roadRampEditingId = null; this.selectedRoadRampId = null; this.waterCourses = []; this.waterCourseDraft = []; this.waterCourseEditingId = null; this.selectedWaterCourseId = null; this.waterCourseDrawing = false; this.massWaterSettings = null; this.riverWaterSettings = null; this.lastWaterMode = 'mass'; this.structureAssets = []; this.structureCollections = []; this.structurePlacements = []; this.libraryCollectionIds = new Set(); this.presetCache = { brush: {}, compilation: {}, mountain: {} }; this.structureDrawing = false; this.structureStrokeBefore = null; this.structureLastPoint = null; this.playableBoundaryCache = null; this.playableBoundaryPathCache = null; this.dirty = true; this.compiledFiles = null; this.activePreview = 'preview';
     this.viewer3d = new Terrain3DViewer({
       canvas: $('terrain-3d-canvas'), status: $('terrain-3d-status'), scaleInput: $('terrain-3d-scale'), scaleValue: $('terrain-3d-scale-value'),
@@ -165,6 +189,8 @@ class TerrainEditor {
     $('water-shore-width').value = readPreference('jkr-terrain-water-shore-width', '6');
     $('water-shore-profile').value = readPreference('jkr-terrain-water-shore-profile', 'natural');
     $('water-road-policy').value = readPreference('jkr-terrain-water-road-policy', 'protect');
+    $('water-river-style').value = readPreference('jkr-terrain-water-river-style', 'natural');
+    $('water-cascade-incline').value = readPreference('jkr-terrain-water-cascade-incline', '0');
     $('water-course-smoothing').value = readPreference('jkr-terrain-water-course-smoothing', '60');
     $('water-course-exit').checked = readPreference('jkr-terrain-water-course-exit', 'false') === 'true';
     $('structure-tool-mode').value = readPreference('jkr-terrain-structure-tool-mode', 'populate');
@@ -178,7 +204,7 @@ class TerrainEditor {
     $('structure-avoid-roads').checked = readPreference('jkr-terrain-structure-avoid-roads', 'true') === 'true';
     $('structure-avoid-reserved').checked = readPreference('jkr-terrain-structure-avoid-reserved', 'true') === 'true';
     this.massWaterSettings = this.captureWaterControlSettings('mass'); this.riverWaterSettings = this.captureWaterControlSettings('river'); this.lastWaterMode = $('water-tool-mode').value;
-    this.initializeLayers(); this.buildLayerList(); this.bind(); this.initializePresetManagers(); this.updateLayerControls(); this.updateBrushProfileUi(); this.applyZoom(); this.render(); this.updateVoxelBudget(); this.updateMountainUi();
+    this.initializeLayers(); this.buildLayerList(); this.bind(); this.initializePresetManagers(); this.updateLayerControls(); this.updateBrushProfileUi(); this.updateReferenceUi(); this.applyZoom(); this.render(); this.updateVoxelBudget(); this.updateMountainUi();
     this.loadStructureLibrary({ merge: false }).catch((error) => this.setLibraryStatus(`Sin conexión: ${error.message}`, true));
   }
 
@@ -188,6 +214,7 @@ class TerrainEditor {
       this.layers[name] = new Uint8Array(size); this.layers[name].fill(meta.default);
       this.visibility[name] = true; this.locked[name] = false;
     }
+    this.plateauBaseLayer = this.layers.height_base.slice(); this.plateauObjects = []; this.selectedPlateauId = null;
   }
 
   buildLayerList() {
@@ -210,13 +237,24 @@ class TerrainEditor {
     this.overlay.addEventListener('pointermove', (event) => this.pointerMove(event));
     this.overlay.addEventListener('pointerup', (event) => this.pointerEnd(event));
     this.overlay.addEventListener('pointercancel', (event) => this.pointerEnd(event));
-    this.overlay.addEventListener('pointerleave', () => { if (!this.pointerDown) { this.hover = null; this.renderOverlay(); } });
+    this.overlay.addEventListener('pointerleave', () => { if (!this.pointerDown && !this.referenceDragging) { this.hover = null; this.renderOverlay(); } });
     this.overlay.addEventListener('contextmenu', (event) => event.preventDefault());
 
     $('undo').addEventListener('click', () => this.undo()); $('redo').addEventListener('click', () => this.redo());
     $('clear-layer').addEventListener('click', () => this.clearLayer()); $('show-all').addEventListener('click', () => this.showAll());
     $('zoom').addEventListener('input', () => this.applyZoom()); $('grid-toggle').addEventListener('change', () => this.renderOverlay());
     $('view-mode').addEventListener('change', () => this.render());
+    $('reference-image-file').addEventListener('change', (event) => this.importReferenceImage(event));
+    $('reference-visible').addEventListener('change', () => this.updateReferenceFromControls());
+    $('reference-locked').addEventListener('change', () => { if ($('reference-locked').checked) $('reference-edit-mode').checked = false; this.updateReferenceFromControls(); });
+    $('reference-edit-mode').addEventListener('change', () => { this.updateReferenceUi(); this.renderReference(); });
+    $('reference-opacity').addEventListener('input', () => { $('reference-opacity-value').textContent = `${$('reference-opacity').value}%`; this.updateReferenceFromControls(); });
+    for (const id of ['reference-scale', 'reference-rotation', 'reference-position-x', 'reference-position-z']) $(id).addEventListener('input', () => this.updateReferenceFromControls());
+    $('reference-fit').addEventListener('click', () => this.fitReferenceToCanvas());
+    $('reference-center').addEventListener('click', () => this.centerReference());
+    $('reference-reset').addEventListener('click', () => this.resetReferenceTransform());
+    $('reference-remove').addEventListener('click', () => this.removeReferenceImage());
+    document.querySelectorAll('[data-dock-group="properties"]').forEach((button) => button.addEventListener('click', () => requestAnimationFrame(() => { this.updateReferenceUi(); this.renderReference(); })));
     $('brush-action').addEventListener('change', () => this.updateValueOptions());
     $('dimension-preset').addEventListener('change', () => this.applyPreset()); $('apply-dimensions').addEventListener('click', () => this.resizeFromInputs());
     $('randomize-seed').addEventListener('click', () => this.randomizeSeed());
@@ -231,8 +269,9 @@ class TerrainEditor {
     for (const id of ['plateau-height', 'plateau-radius', 'plateau-slope-width', 'plateau-support-width', 'plateau-support-height']) $(id).addEventListener('input', () => { writePreference(`jkr-terrain-${id}`, $(id).value); this.updatePlateauUi(); this.renderOverlay(); });
     $('plateau-support-enabled').addEventListener('change', () => { writePreference('jkr-terrain-plateau-support-enabled', String($('plateau-support-enabled').checked)); this.updatePlateauUi(); this.renderOverlay(); });
     $('plateau-action').addEventListener('change', () => { this.updatePlateauUi(); this.renderOverlay(); });
-    $('plateau-tool-mode').addEventListener('change', () => { writePreference('jkr-terrain-plateau-tool-mode', $('plateau-tool-mode').value); this.cancelRoadRampDraft(); this.updateLayerControls(); this.renderOverlay(); });
+    $('plateau-tool-mode').addEventListener('change', () => { writePreference('jkr-terrain-plateau-tool-mode', $('plateau-tool-mode').value); this.cancelRoadRampDraft(); if ($('plateau-tool-mode').value !== 'select') this.clearPlateauSelection(false); this.updateLayerControls(); this.renderOverlay(); });
     $('plateau-pick-height').addEventListener('click', () => this.togglePlateauHeightPicker());
+    $('plateau-apply-edit').addEventListener('click', () => this.applySelectedPlateauEdit());
     $('road-tool-mode').addEventListener('change', () => { this.cancelRoadRampDraft(); this.updateLayerControls(); this.renderOverlay(); });
     for (const id of ['road-ramp-width', 'road-ramp-shoulder', 'road-ramp-ratio', 'road-ramp-start-landing', 'road-ramp-end-landing', 'road-ramp-side-ratio', 'road-ramp-max-side-width', 'road-ramp-side-roundness']) {
       $(id).addEventListener('input', () => { writePreference(`jkr-terrain-${id}`, $(id).value); this.updateRoadRampUi(); this.renderOverlay(); });
@@ -248,7 +287,7 @@ class TerrainEditor {
     $('water-tool-mode').addEventListener('change', () => { const nextMode = $('water-tool-mode').value; this.rememberWaterControlSettings(this.lastWaterMode); this.lastWaterMode = nextMode; this.applyWaterControlSettings(nextMode === 'mass' ? this.massWaterSettings : this.riverWaterSettings); writePreference('jkr-terrain-water-tool-mode', nextMode); this.cancelWaterCourseDraft(); this.updateLayerControls(); this.renderOverlay(); });
     $('water-mass-action').addEventListener('change', () => { writePreference('jkr-terrain-water-mass-action', $('water-mass-action').value); this.rememberWaterControlSettings('mass'); this.updateWaterUi(); this.renderOverlay(); });
     for (const id of ['water-width', 'water-depth', 'water-shore-width', 'water-course-smoothing']) $(id).addEventListener('input', () => { writePreference(`jkr-terrain-${id}`, $(id).value); this.rememberWaterControlSettings($('water-tool-mode').value); this.updateWaterUi(); this.renderOverlay(); });
-    for (const id of ['water-shore-profile', 'water-road-policy']) $(id).addEventListener('change', () => { writePreference(`jkr-terrain-${id}`, $(id).value); this.rememberWaterControlSettings($('water-tool-mode').value); this.updateWaterUi(); this.renderOverlay(); });
+    for (const id of ['water-shore-profile', 'water-road-policy', 'water-river-style', 'water-cascade-incline']) $(id).addEventListener('change', () => { writePreference(`jkr-terrain-${id}`, $(id).value); this.rememberWaterControlSettings($('water-tool-mode').value); this.updateWaterUi(); this.renderOverlay(); });
     $('water-course-exit').addEventListener('change', () => { writePreference('jkr-terrain-water-course-exit', String($('water-course-exit').checked)); this.rememberWaterControlSettings('river'); this.updateWaterUi(); this.renderOverlay(); });
     $('structure-tool-mode').addEventListener('change', () => { writePreference('jkr-terrain-structure-tool-mode', $('structure-tool-mode').value); this.updateStructureUi(); this.renderOverlay(); });
     $('structure-collection-select').addEventListener('change', () => { this.renderStructureAssets(); this.updateStructureUi(); this.renderOverlay(); });
@@ -271,7 +310,7 @@ class TerrainEditor {
     $('marker-select').addEventListener('click', () => this.setMarkerTool('select'));
     document.querySelectorAll('[data-preview]').forEach((button) => button.addEventListener('click', () => this.selectPreview(button.dataset.preview)));
 
-    for (const id of ['width', 'length', 'schematic-height', 'min-height', 'max-height', 'sea-level']) $(id).addEventListener('input', () => { this.updateVoxelBudget(); this.updatePlateauUi(); });
+    for (const id of ['width', 'length', 'schematic-height', 'min-height', 'max-height', 'sea-level']) $(id).addEventListener('input', () => { this.updateVoxelBudget(); this.updatePlateauUi(); if ((id === 'min-height' || id === 'max-height') && this.plateauObjects.length) { this.regeneratePlateauLayer(); this.render(); } });
     for (const id of ['project-name', 'seed', 'schematic-height', 'min-height', 'max-height', 'sea-level', 'modifier-range', 'max-walk-slope', 'surface-depth', 'data-version', 'mountain-outer-width', 'mountain-inner-transition', 'mountain-height', 'mountain-irregularity', 'mountain-roughness', 'mountain-exit-width', 'mountain-exit-transition']) $(id).addEventListener('input', () => { this.markDirty(); this.updateMountainUi(); this.renderOverlay(); });
     document.addEventListener('keydown', (event) => {
       const editable = ['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement?.tagName);
@@ -287,7 +326,7 @@ class TerrainEditor {
     if (this.roadRampDraft.length && targetRampKind !== this.roadRampDraftKind) this.cancelRoadRampDraft();
     if (name !== 'water') this.cancelWaterCourseDraft();
     if (name !== 'structures') this.cancelStructureStroke();
-    this.activeLayer = name; this.markerTool = null; this.cancelPlateauHeightPicker();
+    this.activeLayer = name; this.markerTool = null; this.cancelPlateauHeightPicker(); if (name !== 'height_base') this.clearPlateauSelection(false);
     document.querySelectorAll('.layer-row').forEach((row) => row.classList.toggle('active', row.dataset.layer === name));
     document.querySelectorAll('.marker-tools button').forEach((button) => button.classList.remove('active'));
     $('active-layer-title').textContent = LAYERS[name].label; this.updateLayerControls(); this.render();
@@ -315,8 +354,9 @@ class TerrainEditor {
     const rampKind = this.activeRampKind();
     const rampMode = Boolean(rampKind);
     const plateauBrushMode = plateauLayer && !rampMode;
+    const plateauSelecting = plateauLayer && $('plateau-tool-mode').value === 'select';
 
-    $('brush-panel-title').textContent = rampKind === 'terrain' ? 'Rampa de meseta' : plateauLayer ? 'Herramientas de altura base' : roadLayer ? 'Herramientas de camino' : waterLayer ? 'Herramienta de agua' : structureLayer ? 'Pincel de estructuras' : 'Pincel';
+    $('brush-panel-title').textContent = rampKind === 'terrain' ? 'Rampa de meseta' : plateauSelecting ? 'Editar meseta' : plateauLayer ? 'Herramientas de altura base' : roadLayer ? 'Herramientas de camino' : waterLayer ? 'Herramienta de agua' : structureLayer ? 'Pincel de estructuras' : 'Pincel';
     $('plateau-tool-panel').hidden = !plateauLayer;
     $('plateau-brush-fields').hidden = !plateauBrushMode;
     $('road-ramp-panel').hidden = !roadLayer;
@@ -361,13 +401,19 @@ class TerrainEditor {
     $('plateau-support-height').value = String(Math.max(1, Math.round((settings.supportHeightPercent || Number($('plateau-support-height').value) || 25) * 10) / 10));
     const supportRequested = $('plateau-support-enabled').checked;
     $('plateau-support-fields').hidden = !supportRequested; $('plateau-support-legend').hidden = !settings.supportEnabled;
-    const ramping = $('plateau-tool-mode').value === 'ramp'; const restoring = $('plateau-action').value === 'restore'; heightInput.disabled = restoring || ramping; $('plateau-pick-height').disabled = restoring || ramping;
+    const mode = $('plateau-tool-mode').value; const ramping = mode === 'ramp'; const selecting = mode === 'select'; const restoring = !selecting && $('plateau-action').value === 'restore';
+    heightInput.disabled = restoring || ramping; $('plateau-pick-height').disabled = restoring || ramping;
+    if ($('plateau-action-field')) $('plateau-action-field').hidden = selecting;
+    if ($('plateau-selection-actions')) $('plateau-selection-actions').hidden = !selecting || !this.selectedPlateau();
+    if (selecting && !this.selectedPlateau() && $('plateau-selection-info')) $('plateau-selection-info').textContent = 'Haz clic sobre una meseta editable.';
     const effectiveHeight = restoring ? layerValueToHeight(128, settings.minHeight, settings.maxHeight) : Math.round(settings.targetHeight);
     const baseText = `Altura Y ${effectiveHeight} · meseta ${settings.plateauRadius.toFixed(1)} de radio · pendiente ${settings.slopeWidth.toFixed(1)} · final de pendiente ${settings.slopeEndRadius.toFixed(1)}.`;
     const supportText = settings.supportEnabled
       ? ` Soporte exterior: ${settings.supportWidth.toFixed(1)} bloques, altura ${settings.supportHeightPercent.toFixed(0)}%, radio total ${settings.radius.toFixed(1)}.`
       : ' Sin soporte exterior: fuera del círculo blanco no se levanta el terreno.';
-    $('plateau-tool-info').textContent = baseText + supportText;
+    $('plateau-tool-info').textContent = selecting && !this.selectedPlateau()
+      ? 'Selecciona una meseta creada con esta versión para cargar y modificar sus parámetros actuales.'
+      : baseText + supportText;
   }
 
   plateauSettings() {
@@ -385,8 +431,128 @@ class TerrainEditor {
     return { ...normalized, action, targetValue: action === 'restore' ? 128 : heightToLayerValue(normalized.targetHeight, normalized.minHeight, normalized.maxHeight) };
   }
 
+
+  plateauObjectFromControls(id, points) {
+    const settings = this.plateauSettings();
+    return normalizePlateauObject({
+      id,
+      points: structuredClone(points || []),
+      target_height: settings.targetHeight,
+      plateau_radius: settings.plateauRadius,
+      slope_width: settings.slopeWidth,
+      support_enabled: $('plateau-support-enabled').checked,
+      support_width: Number($('plateau-support-width').value),
+      support_height_percent: Number($('plateau-support-height').value),
+    }, settings.minHeight, settings.maxHeight);
+  }
+
+  regeneratePlateauLayer() {
+    if (!(this.plateauBaseLayer instanceof Uint8Array) || this.plateauBaseLayer.length !== this.width * this.length) this.plateauBaseLayer = this.layers.height_base.slice();
+    this.layers.height_base = rasterizePlateauObjects(
+      this.plateauBaseLayer,
+      this.width,
+      this.length,
+      this.plateauObjects,
+      Number($('min-height').value),
+      Number($('max-height').value),
+    );
+  }
+
+  selectedPlateau() {
+    return this.plateauObjects.find((item) => item.id === this.selectedPlateauId) || null;
+  }
+
+  clearPlateauSelection(render = true) {
+    this.selectedPlateauId = null;
+    if ($('plateau-selection-actions')) $('plateau-selection-actions').hidden = true;
+    if ($('plateau-selection-info')) $('plateau-selection-info').textContent = 'Haz clic sobre una meseta editable.';
+    if (render) { this.updatePlateauUi(); this.renderOverlay(); }
+  }
+
+  loadPlateauIntoControls(object) {
+    if (!object) return;
+    $('plateau-height').value = String(Math.round(object.target_height));
+    $('plateau-radius').value = String(object.plateau_radius);
+    $('plateau-slope-width').value = String(object.slope_width);
+    $('plateau-support-enabled').checked = Boolean(object.support_enabled);
+    $('plateau-support-width').value = String(object.support_width || 1);
+    $('plateau-support-height').value = String(object.support_height_percent || 1);
+    $('plateau-action').value = 'paint';
+    this.updatePlateauUi();
+  }
+
+  selectPlateauAt(point) {
+    const minHeight = Number($('min-height').value); const maxHeight = Number($('max-height').value);
+    let selected = null;
+    for (let index = this.plateauObjects.length - 1; index >= 0; index -= 1) {
+      const candidate = this.plateauObjects[index];
+      if (plateauObjectContainsPoint(candidate, point, minHeight, maxHeight)) { selected = candidate; break; }
+    }
+    if (!selected) { this.clearPlateauSelection(); this.message('No hay una meseta editable bajo ese punto. Las mesetas creadas antes de esta actualización permanecen integradas en la capa.'); return; }
+    this.selectedPlateauId = selected.id; this.loadPlateauIntoControls(selected);
+    $('plateau-selection-actions').hidden = false;
+    $('plateau-selection-info').textContent = `Meseta seleccionada · ${selected.points.length} punto(s) del trazo.`;
+    this.message('Meseta seleccionada. Modifica sus parámetros actuales y pulsa Aplicar cambios.'); this.renderOverlay();
+  }
+
+  applySelectedPlateauEdit({ silent = false } = {}) {
+    const current = this.selectedPlateau(); if (!current) return false;
+    const replacement = this.plateauObjectFromControls(current.id, current.points);
+    const comparable = (item) => JSON.stringify({
+      target_height: item.target_height,
+      plateau_radius: item.plateau_radius,
+      slope_width: item.slope_width,
+      support_enabled: item.support_enabled,
+      support_width: item.support_width,
+      support_height_percent: item.support_height_percent,
+    });
+    if (comparable(current) === comparable(replacement)) return false;
+    const before = structuredClone(this.plateauObjects);
+    this.plateauObjects = this.plateauObjects.map((item) => item.id === current.id ? replacement : item);
+    this.regeneratePlateauLayer();
+    this.pushHistory({ type: 'plateauObjects', before, after: structuredClone(this.plateauObjects), selectedId: current.id });
+    $('plateau-selection-info').textContent = `Meseta actualizada · altura Y ${Math.round(replacement.target_height)}.`;
+    this.render();
+    if (!silent) this.message('Parámetros de la meseta aplicados. Compila para revisar el resultado final.');
+    return true;
+  }
+
+  beginPlateauObjectStroke(point) {
+    this.plateauStrokePoints = [{ x: point.x, z: point.z }];
+    this.plateauStrokeSettings = this.plateauObjectFromControls(createPlateauId(), this.plateauStrokePoints);
+    this.plateauObjectsBeforeStroke = structuredClone(this.plateauObjects);
+  }
+
+  appendPlateauObjectPoint(point) {
+    if (!this.plateauStrokeSettings) return;
+    const previous = this.plateauStrokePoints.at(-1);
+    if (!previous || Math.hypot(previous.x - point.x, previous.z - point.z) >= 0.65) this.plateauStrokePoints.push({ x: point.x, z: point.z });
+    if (this.plateauStrokePoints.length > 2048) this.plateauStrokePoints.splice(1, 1);
+  }
+
+  finishPlateauObjectStroke() {
+    if (!this.plateauStrokeSettings || !this.plateauStrokePoints.length) return false;
+    if (!this.currentChanges?.size) { this.plateauStrokePoints = []; this.plateauStrokeSettings = null; this.plateauObjectsBeforeStroke = null; this.currentChanges = null; this.strokeBaseValues = null; this.strokeInfluence = null; return false; }
+    const object = this.plateauObjectFromControls(this.plateauStrokeSettings.id, this.plateauStrokePoints);
+    const before = this.plateauObjectsBeforeStroke || structuredClone(this.plateauObjects);
+    this.plateauObjects.push(object); this.selectedPlateauId = object.id; this.regeneratePlateauLayer();
+    this.pushHistory({ type: 'plateauObjects', before, after: structuredClone(this.plateauObjects), selectedId: object.id });
+    this.plateauStrokePoints = []; this.plateauStrokeSettings = null; this.plateauObjectsBeforeStroke = null;
+    this.currentChanges = null; this.strokeBaseValues = null; this.strokeInfluence = null;
+    this.message('Meseta creada como objeto editable. Usa Seleccionar meseta para cambiar sus parámetros.');
+    return true;
+  }
+
+  setPlateauBaseCell(index, value) {
+    const next = clamp(Math.round(value), 0, 255); if (this.plateauBaseLayer[index] === next) return;
+    if (!this.plateauBaseChanges) this.plateauBaseChanges = new Map();
+    if (!this.plateauBaseChanges.has(index)) this.plateauBaseChanges.set(index, this.plateauBaseLayer[index]);
+    this.plateauBaseLayer[index] = next;
+  }
+
   togglePlateauHeightPicker() {
-    if (this.activeLayer !== 'height_base' || $('plateau-tool-mode').value === 'ramp' || $('plateau-action').value === 'restore') return;
+    const mode = $('plateau-tool-mode').value;
+    if (this.activeLayer !== 'height_base' || mode === 'ramp' || (mode === 'plateau' && $('plateau-action').value === 'restore')) return;
     this.markerTool = null; document.querySelectorAll('.marker-tools button').forEach((button) => button.classList.remove('active'));
     this.plateauPickHeight = !this.plateauPickHeight; $('plateau-pick-height').classList.toggle('active', this.plateauPickHeight);
     this.overlay.style.cursor = this.plateauPickHeight ? 'cell' : 'crosshair';
@@ -600,6 +766,8 @@ class TerrainEditor {
       shoreWidth: $('water-shore-width').value,
       shoreProfile: $('water-shore-profile').value,
       roadPolicy: $('water-road-policy').value,
+      riverStyle: $('water-river-style').value,
+      cascadeInclineRatio: $('water-cascade-incline').value,
       smoothing: $('water-course-smoothing').value,
       exitEnabled: $('water-course-exit').checked,
     });
@@ -614,7 +782,7 @@ class TerrainEditor {
   applyWaterControlSettings(settings) {
     if (!settings) return;
     $('water-width').value = settings.width; $('water-depth').value = settings.depth; $('water-shore-width').value = settings.shoreWidth;
-    $('water-shore-profile').value = settings.shoreProfile; $('water-road-policy').value = settings.roadPolicy;
+    $('water-shore-profile').value = settings.shoreProfile; $('water-road-policy').value = settings.roadPolicy; $('water-river-style').value = settings.riverStyle; $('water-cascade-incline').value = String(settings.cascadeInclineRatio);
     if (settings.mode === 'mass') $('water-mass-action').value = settings.action; else { $('water-course-smoothing').value = settings.smoothing; $('water-course-exit').checked = settings.exitEnabled; }
   }
 
@@ -627,6 +795,8 @@ class TerrainEditor {
       shoreWidth: $('water-shore-width').value,
       shoreProfile: $('water-shore-profile').value,
       roadPolicy: $('water-road-policy').value,
+      riverStyle: $('water-river-style').value,
+      cascadeInclineRatio: $('water-cascade-incline').value,
       smoothing: $('water-course-smoothing').value,
       exitEnabled: $('water-course-exit').checked,
     });
@@ -640,8 +810,10 @@ class TerrainEditor {
     $('water-course-apply').disabled = !this.waterCourseEditingId || this.waterCourseDraft.length < 2;
     if (river) {
       const draftLength = courseLength(this.waterCourseDraft);
-      const editText = this.waterCourseEditingId ? 'Editando un río guardado. Cambia controles y pulsa Aplicar, o dibuja un recorrido nuevo para reemplazarlo.' : 'Mantén clic y dibuja libremente. Al soltar se crea un río editable.';
-      $('water-course-info').textContent = this.waterCourseDraft.length >= 2 ? `${editText} Recorrido actual: ${draftLength.toFixed(1)} bloques · ${this.waterCourseDraft.length} muestras.` : editText;
+      const editText = this.waterCourseEditingId ? 'Editando un río guardado. Cambia controles y pulsa Aplicar, o dibuja un recorrido nuevo para reemplazarlo.' : 'Mantén clic y dibuja libremente. La aplicación resolverá automáticamente alturas, cauce, cascadas y pozas.';
+      const styles = { calm: 'tranquilo', natural: 'natural', mountain: 'montañoso' };
+      const incline = settings.cascadeInclineRatio > 0 ? `1:${settings.cascadeInclineRatio}` : 'vertical';
+      $('water-course-info').textContent = this.waterCourseDraft.length >= 2 ? `${editText} Recorrido actual: ${draftLength.toFixed(1)} bloques · ${this.waterCourseDraft.length} muestras · estilo ${styles[settings.riverStyle]} · cascada ${incline}.` : `${editText} Estilo actual: ${styles[settings.riverStyle]} · cascada ${incline}.`;
     } else {
       const profiles = { compact: 'compacta', natural: 'natural', smooth: 'suave' };
       const action = settings.action === 'erase' ? 'Borra' : 'Pinta';
@@ -679,12 +851,12 @@ class TerrainEditor {
     const course = {
       id, label: $('water-course-label').value.trim().slice(0, 80) || current?.label || `Río ${position + 1}`,
       points: structuredClone(points), width: settings.width, depth: settings.depth, shore_width: settings.shoreWidth,
-      shore_profile: settings.shoreProfile, road_policy: settings.roadPolicy, smoothing: settings.smoothing, exit_enabled: settings.exitEnabled,
+      shore_profile: settings.shoreProfile, road_policy: settings.roadPolicy, river_style: settings.riverStyle, cascade_incline_ratio: settings.cascadeInclineRatio, smoothing: settings.smoothing, exit_enabled: settings.exitEnabled,
     };
     if (editingId) this.waterCourses = this.waterCourses.map((item) => item.id === editingId ? course : item); else this.waterCourses.push(course);
     this.selectedWaterCourseId = id; this.waterCourseEditingId = null; this.waterCourseDraft = []; $('water-course-label').value = ''; this.riverWaterSettings = settings; this.lastWaterMode = 'river';
     this.pushHistory({ type: 'waterCourses', before, after: structuredClone(this.waterCourses) }); this.updateWaterUi(); this.renderOverlay();
-    this.message(`${editingId ? 'Río actualizado' : 'Río creado'}: ${course.label}. Compila la vista para revisar su profundidad y niveles.`);
+    this.message(`${editingId ? 'Río actualizado' : 'Río creado'}: ${course.label}. Compila para que el perfil automático resuelva alturas, cascadas y pozas.`);
   }
 
   applyWaterCourseEdits() {
@@ -700,7 +872,7 @@ class TerrainEditor {
     const course = this.waterCourses.find((item) => item.id === id); if (!course) return;
     this.rememberWaterControlSettings(this.lastWaterMode); this.setActiveLayer('water'); $('water-tool-mode').value = 'river'; this.lastWaterMode = 'river'; this.selectedWaterCourseId = id; this.waterCourseEditingId = id; this.waterCourseDraft = structuredClone(course.points);
     $('water-course-label').value = course.label || ''; $('water-width').value = course.width; $('water-depth').value = course.depth; $('water-shore-width').value = course.shore_width;
-    $('water-shore-profile').value = course.shore_profile; $('water-road-policy').value = course.road_policy; $('water-course-smoothing').value = course.smoothing ?? 60; $('water-course-exit').checked = Boolean(course.exit_enabled);
+    $('water-shore-profile').value = course.shore_profile; $('water-road-policy').value = course.road_policy; $('water-river-style').value = course.river_style || 'natural'; $('water-cascade-incline').value = String(course.cascade_incline_ratio ?? 0); $('water-course-smoothing').value = course.smoothing ?? 60; $('water-course-exit').checked = Boolean(course.exit_enabled);
     this.riverWaterSettings = this.captureWaterControlSettings('river');
     this.updateLayerControls(); this.renderOverlay(); this.message('Río cargado. Puedes cambiar sus controles y aplicar, o dibujar un recorrido nuevo para reemplazarlo.');
   }
@@ -718,7 +890,7 @@ class TerrainEditor {
       const item = document.createElement('div'); item.className = `road-ramp-item${course.id === this.selectedWaterCourseId ? ' selected' : ''}`;
       const content = document.createElement('button'); content.type = 'button'; content.className = 'road-ramp-select'; content.addEventListener('click', () => { this.selectedWaterCourseId = course.id; this.renderWaterCourseList(); this.renderOverlay(); });
       const title = document.createElement('strong'); title.textContent = course.label || course.id; const meta = document.createElement('small');
-      meta.textContent = `ancho ${course.width} · profundidad ${course.depth} · orilla ${course.shore_width} · ${course.points.length} puntos${course.exit_enabled ? ' · salida' : ''}`;
+      const styleLabels = { calm: 'tranquilo', natural: 'natural', mountain: 'montañoso' }; const inclineLabel = Number(course.cascade_incline_ratio || 0) > 0 ? `1:${course.cascade_incline_ratio}` : 'vertical'; meta.textContent = `ancho ${course.width} · profundidad ${course.depth} · orilla ${course.shore_width} · automático ${styleLabels[course.river_style || 'natural']} · cascada ${inclineLabel} · ${course.points.length} puntos${course.exit_enabled ? ' · salida' : ''}`;
       content.append(title, meta); const actions = document.createElement('div'); actions.className = 'road-ramp-item-actions';
       const edit = document.createElement('button'); edit.type = 'button'; edit.textContent = 'Editar'; edit.addEventListener('click', () => this.editWaterCourse(course.id));
       const remove = document.createElement('button'); remove.type = 'button'; remove.textContent = 'Eliminar'; remove.className = 'danger-soft'; remove.addEventListener('click', () => this.deleteWaterCourse(course.id));
@@ -737,7 +909,7 @@ class TerrainEditor {
 
   drawWaterCourses(ctx) {
     if (!this.visibility.water && this.activeLayer !== 'water') return;
-    for (const course of this.waterCourses) this.drawWaterCoursePath(ctx, course.points, normalizeWaterSettings({ mode: 'river', width: course.width, depth: course.depth, shoreWidth: course.shore_width, shoreProfile: course.shore_profile, roadPolicy: course.road_policy, smoothing: course.smoothing, exitEnabled: course.exit_enabled }), course.id === this.selectedWaterCourseId, false);
+    for (const course of this.waterCourses) this.drawWaterCoursePath(ctx, course.points, normalizeWaterSettings({ mode: 'river', width: course.width, depth: course.depth, shoreWidth: course.shore_width, shoreProfile: course.shore_profile, roadPolicy: course.road_policy, riverStyle: course.river_style || 'natural', cascadeInclineRatio: course.cascade_incline_ratio ?? 0, smoothing: course.smoothing, exitEnabled: course.exit_enabled }), course.id === this.selectedWaterCourseId, false);
     if (this.activeLayer === 'water' && $('water-tool-mode').value === 'river' && this.waterCourseDraft.length) this.drawWaterCoursePath(ctx, this.waterCourseDraft, this.waterSettings(), true, true);
   }
 
@@ -1135,6 +1307,204 @@ class TerrainEditor {
     this.message(`Semilla aleatoria generada: ${value}.`);
   }
 
+  referenceSnapshot() {
+    if (!this.referenceGuide?.data_url) return null;
+    return structuredClone(this.referenceGuide);
+  }
+
+  referenceDisplaySize() {
+    if (!this.referenceGuide) return { width: 0, height: 0 };
+    return {
+      width: this.referenceGuide.fit_width * this.referenceGuide.scale,
+      height: this.referenceGuide.fit_height * this.referenceGuide.scale,
+    };
+  }
+
+  referenceEditingActive() {
+    return Boolean(
+      this.referenceImage && this.referenceGuide?.visible && !this.referenceGuide.locked
+      && $('reference-edit-mode')?.checked && !$('reference-dock-panel')?.hidden
+    );
+  }
+
+  updateReferenceCursor() {
+    const editing = this.referenceEditingActive();
+    document.body.classList.toggle('reference-editing', editing && !this.referenceDragging);
+    document.body.classList.toggle('reference-dragging', editing && this.referenceDragging);
+  }
+
+  syncReferenceControls() {
+    const guide = this.referenceGuide; const enabled = Boolean(guide && this.referenceImage);
+    for (const id of ['reference-visible', 'reference-locked', 'reference-opacity', 'reference-remove']) {
+      const control = $(id); if (control) control.disabled = !enabled;
+    }
+    const transformDisabled = !enabled || Boolean(guide?.locked);
+    for (const id of ['reference-scale', 'reference-rotation', 'reference-position-x', 'reference-position-z', 'reference-fit', 'reference-center', 'reference-reset']) {
+      const control = $(id); if (control) control.disabled = transformDisabled;
+    }
+    if ($('reference-edit-mode')) $('reference-edit-mode').disabled = transformDisabled || !Boolean(guide?.visible);
+    if (!enabled) {
+      $('reference-status-badge').textContent = 'Sin imagen'; $('reference-status-badge').className = 'badge neutral';
+      $('reference-info').textContent = 'Carga una imagen para utilizarla como guía.';
+      $('reference-opacity-value').textContent = '40%';
+      return;
+    }
+    $('reference-visible').checked = guide.visible;
+    $('reference-locked').checked = guide.locked;
+    if (guide.locked) $('reference-edit-mode').checked = false;
+    $('reference-opacity').value = Math.round(guide.opacity * 100);
+    $('reference-opacity-value').textContent = `${Math.round(guide.opacity * 100)}%`;
+    $('reference-scale').value = Math.round(guide.scale * 100);
+    $('reference-rotation').value = Number(guide.rotation.toFixed(1));
+    $('reference-position-x').value = Number(guide.x.toFixed(1));
+    $('reference-position-z').value = Number(guide.z.toFixed(1));
+    const size = this.referenceDisplaySize();
+    $('reference-status-badge').textContent = guide.visible ? 'Visible' : 'Oculta';
+    $('reference-status-badge').className = `badge ${guide.visible ? 'ok' : 'neutral'}`;
+    $('reference-info').textContent = `${guide.name || 'Referencia'} · ${size.width.toFixed(1)} × ${size.height.toFixed(1)} bloques · centro X ${guide.x.toFixed(1)}, Z ${guide.z.toFixed(1)}.`;
+  }
+
+  updateReferenceUi() {
+    this.syncReferenceControls(); this.updateReferenceCursor();
+  }
+
+  updateReferenceFromControls() {
+    if (!this.referenceGuide || !this.referenceImage) return;
+    this.referenceGuide.visible = $('reference-visible').checked;
+    this.referenceGuide.locked = $('reference-locked').checked;
+    this.referenceGuide.opacity = clamp(Number($('reference-opacity').value) / 100, 0, 1);
+    this.referenceGuide.scale = clamp(Number($('reference-scale').value) / 100, 0.1, 5);
+    this.referenceGuide.rotation = clamp(Number($('reference-rotation').value) || 0, -180, 180);
+    this.referenceGuide.x = clamp(Number($('reference-position-x').value) || 0, -this.width, this.width * 2);
+    this.referenceGuide.z = clamp(Number($('reference-position-z').value) || 0, -this.length, this.length * 2);
+    this.markDirty(); this.updateReferenceUi(); this.renderReference();
+  }
+
+  async importReferenceImage(event) {
+    const file = event.target.files?.[0]; if (!file) return;
+    try {
+      if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) throw new Error('Usa una imagen PNG, JPG o WebP.');
+      if (file.size > 20 * 1024 * 1024) throw new Error('La imagen supera el límite de 20 MB.');
+      const dataUrl = await readFileAsDataUrl(file);
+      const image = await loadReferenceImage(dataUrl);
+      this.referenceImage = image;
+      this.referenceGuide = {
+        name: file.name.slice(0, 160), data_url: dataUrl,
+        x: this.width / 2, z: this.length / 2,
+        fit_width: 1, fit_height: 1, scale: 1, rotation: 0,
+        opacity: 0.4, visible: true, locked: false,
+      };
+      this.fitReferenceToCanvas(false); $('reference-edit-mode').checked = false;
+      this.markDirty(); this.updateReferenceUi(); this.renderReference();
+      this.message(`Imagen de referencia cargada: ${file.name}.`);
+    } catch (error) { this.message(error.message, true); }
+    finally { event.target.value = ''; }
+  }
+
+  async loadReferenceSnapshot(snapshot) {
+    this.referenceGuide = null; this.referenceImage = null; this.referenceDragging = false; this.referenceDragStart = null;
+    if (!snapshot?.data_url) { this.updateReferenceUi(); this.renderReference(); return; }
+    if (!/^data:image\/(png|jpeg|webp);base64,/.test(snapshot.data_url)) throw new Error('La referencia guardada usa un formato no compatible.');
+    const image = await loadReferenceImage(snapshot.data_url);
+    this.referenceImage = image;
+    this.referenceGuide = {
+      name: String(snapshot.name || 'referencia').slice(0, 160), data_url: snapshot.data_url,
+      x: Number.isFinite(Number(snapshot.x)) ? Number(snapshot.x) : this.width / 2,
+      z: Number.isFinite(Number(snapshot.z)) ? Number(snapshot.z) : this.length / 2,
+      fit_width: clamp(Number(snapshot.fit_width) || this.width, 0.1, 8192),
+      fit_height: clamp(Number(snapshot.fit_height) || this.length, 0.1, 8192),
+      scale: clamp(Number(snapshot.scale) || 1, 0.1, 5),
+      rotation: clamp(Number(snapshot.rotation) || 0, -180, 180),
+      opacity: Number.isFinite(Number(snapshot.opacity)) ? clamp(Number(snapshot.opacity), 0, 1) : 0.4,
+      visible: snapshot.visible !== false,
+      locked: Boolean(snapshot.locked),
+    };
+    $('reference-edit-mode').checked = false; this.updateReferenceUi(); this.renderReference();
+  }
+
+  fitReferenceToCanvas(mark = true) {
+    if (!this.referenceGuide || !this.referenceImage) return;
+    const imageRatio = this.referenceImage.naturalWidth / Math.max(1, this.referenceImage.naturalHeight);
+    const mapRatio = this.width / Math.max(1, this.length);
+    if (imageRatio >= mapRatio) {
+      this.referenceGuide.fit_width = this.width;
+      this.referenceGuide.fit_height = this.width / imageRatio;
+    } else {
+      this.referenceGuide.fit_height = this.length;
+      this.referenceGuide.fit_width = this.length * imageRatio;
+    }
+    this.referenceGuide.scale = 1; this.referenceGuide.x = this.width / 2; this.referenceGuide.z = this.length / 2;
+    if (mark) this.markDirty(); this.updateReferenceUi(); this.renderReference();
+  }
+
+  centerReference() {
+    if (!this.referenceGuide) return;
+    this.referenceGuide.x = this.width / 2; this.referenceGuide.z = this.length / 2;
+    this.markDirty(); this.updateReferenceUi(); this.renderReference();
+  }
+
+  resetReferenceTransform() {
+    if (!this.referenceGuide) return;
+    this.referenceGuide.rotation = 0; this.referenceGuide.opacity = 0.4; this.referenceGuide.visible = true; this.referenceGuide.locked = false;
+    this.fitReferenceToCanvas(false); this.markDirty(); this.updateReferenceUi(); this.renderReference();
+  }
+
+  removeReferenceImage() {
+    if (!this.referenceGuide || !confirm('¿Quitar la imagen de referencia del proyecto?')) return;
+    this.referenceGuide = null; this.referenceImage = null; this.referenceDragging = false; this.referenceDragStart = null;
+    $('reference-edit-mode').checked = false; this.markDirty(); this.updateReferenceUi(); this.renderReference(); this.message('Imagen de referencia eliminada.');
+  }
+
+  renderReference() {
+    if (!this.referenceCtx || !this.referenceCanvas) return;
+    const ctx = this.referenceCtx; ctx.clearRect(0, 0, this.width, this.length);
+    const guide = this.referenceGuide; if (!guide?.visible || !this.referenceImage) { this.updateReferenceCursor(); return; }
+    const size = this.referenceDisplaySize();
+    ctx.save(); ctx.translate(guide.x, guide.z); ctx.rotate(guide.rotation * Math.PI / 180); ctx.globalAlpha = guide.opacity; ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(this.referenceImage, -size.width / 2, -size.height / 2, size.width, size.height);
+    ctx.globalAlpha = 1;
+    if (this.referenceEditingActive()) {
+      ctx.strokeStyle = '#7fe5dd'; ctx.lineWidth = Math.max(0.8, this.width / 800); ctx.setLineDash([Math.max(2, this.width / 400), Math.max(2, this.width / 400)]);
+      ctx.strokeRect(-size.width / 2, -size.height / 2, size.width, size.height); ctx.setLineDash([]);
+      const cross = Math.max(2.5, Math.min(size.width, size.height) * 0.025); ctx.beginPath(); ctx.moveTo(-cross, 0); ctx.lineTo(cross, 0); ctx.moveTo(0, -cross); ctx.lineTo(0, cross); ctx.stroke();
+    }
+    ctx.restore(); this.updateReferenceCursor();
+  }
+
+  referenceHitTest(point) {
+    if (!this.referenceGuide || !this.referenceImage) return false;
+    const size = this.referenceDisplaySize(); const angle = -this.referenceGuide.rotation * Math.PI / 180;
+    const dx = point.x - this.referenceGuide.x; const dz = point.z - this.referenceGuide.z;
+    const localX = dx * Math.cos(angle) - dz * Math.sin(angle); const localZ = dx * Math.sin(angle) + dz * Math.cos(angle);
+    return Math.abs(localX) <= size.width / 2 && Math.abs(localZ) <= size.height / 2;
+  }
+
+  eventCanvasPoint(event) {
+    const rect = this.overlay.getBoundingClientRect();
+    return { x: (event.clientX - rect.left) / rect.width * this.width, z: (event.clientY - rect.top) / rect.height * this.length };
+  }
+
+  beginReferenceDrag(event) {
+    const point = this.eventCanvasPoint(event);
+    if (!this.referenceHitTest(point)) { this.message('Haz clic dentro de la imagen para moverla.'); return true; }
+    this.referenceDragging = true; this.referenceDragStart = { point, x: this.referenceGuide.x, z: this.referenceGuide.z };
+    this.overlay.setPointerCapture(event.pointerId); this.updateReferenceCursor(); this.renderReference(); return true;
+  }
+
+  moveReferenceDrag(event) {
+    if (!this.referenceDragging || !this.referenceDragStart || !this.referenceGuide) return false;
+    const point = this.eventCanvasPoint(event); const dx = point.x - this.referenceDragStart.point.x; const dz = point.z - this.referenceDragStart.point.z;
+    this.referenceGuide.x = clamp(this.referenceDragStart.x + dx, -this.width, this.width * 2);
+    this.referenceGuide.z = clamp(this.referenceDragStart.z + dz, -this.length, this.length * 2);
+    this.syncReferenceControls(); this.renderReference(); return true;
+  }
+
+  finishReferenceDrag(event) {
+    if (!this.referenceDragging) return false;
+    this.referenceDragging = false; this.referenceDragStart = null; try { this.overlay.releasePointerCapture(event.pointerId); } catch (_) { /* no-op */ }
+    this.markDirty(); this.updateReferenceUi(); this.renderReference(); return true;
+  }
+
   eventPoint(event) {
     const rect = this.overlay.getBoundingClientRect();
     return { x: clamp(Math.floor((event.clientX - rect.left) / rect.width * this.width), 0, this.width - 1), z: clamp(Math.floor((event.clientY - rect.top) / rect.height * this.length), 0, this.length - 1) };
@@ -1142,7 +1512,9 @@ class TerrainEditor {
 
   pointerStart(event) {
     event.preventDefault(); const point = this.eventPoint(event); this.hover = point;
+    if (this.referenceEditingActive()) { this.beginReferenceDrag(event); return; }
     if (this.plateauPickHeight && this.activeLayer === 'height_base') { this.samplePlateauHeight(point); return; }
+    if (this.activeLayer === 'height_base' && $('plateau-tool-mode').value === 'select') { this.selectPlateauAt(point); return; }
     if (this.markerTool) {
       try { this.handleMarkerClick(point); }
       catch (error) { console.error(error); this.message(`No se pudo colocar el marcador: ${error.message || error}`, true); }
@@ -1153,6 +1525,10 @@ class TerrainEditor {
     if (this.activeLayer === 'structures') { this.beginStructureStroke(point, event); return; }
     if (this.locked[this.activeLayer]) { this.message('La capa está bloqueada.'); return; }
     this.pointerDown = true; this.overlay.setPointerCapture(event.pointerId); this.currentChanges = new Map(); this.strokeBaseValues = new Map(); this.strokeInfluence = new Map();
+    if (this.activeLayer === 'height_base' && $('plateau-tool-mode').value === 'plateau') {
+      if ($('plateau-action').value === 'paint') this.beginPlateauObjectStroke(point);
+      else this.plateauBaseChanges = new Map();
+    }
     if ($('brush-action').value === 'fill' && ['mask', 'category', 'material'].includes(LAYERS[this.activeLayer].kind)) {
       this.floodFill(point.x, point.z); this.finishStroke(); this.pointerDown = false; return;
     }
@@ -1164,17 +1540,20 @@ class TerrainEditor {
   pointerMove(event) {
     const point = this.eventPoint(event); $('cursor-info').textContent = `X ${point.x} · Z ${point.z}`;
     const previous = this.hover; this.hover = point;
+    if (this.referenceDragging) { this.moveReferenceDrag(event); return; }
     if (this.waterCourseDrawing) this.appendWaterCoursePoint(point);
     else if (this.structureDrawing) this.appendStructureStroke(point);
-    else if (this.pointerDown && !this.markerTool && $('stroke-mode').value === 'free' && previous) this.paintSegment(previous, point);
+    else if (this.pointerDown && !this.markerTool && $('stroke-mode').value === 'free' && previous) { if (this.plateauStrokeSettings) this.appendPlateauObjectPoint(point); this.paintSegment(previous, point); }
     this.renderOverlay();
   }
 
   pointerEnd(event) {
+    if (this.referenceDragging) { this.finishReferenceDrag(event); return; }
     if (this.waterCourseDrawing) { this.appendWaterCoursePoint(this.eventPoint(event)); this.finishWaterCourseStroke(event); return; }
     if (this.structureDrawing) { this.appendStructureStroke(this.eventPoint(event)); this.finishStructureStroke(event); return; }
     if (!this.pointerDown) return;
     const point = this.eventPoint(event);
+    if (this.plateauStrokeSettings) this.appendPlateauObjectPoint(point);
     if ($('stroke-mode').value === 'line' && this.lineStart) this.paintSegment(this.lineStart, point);
     this.pointerDown = false; this.lineStart = null; try { this.overlay.releasePointerCapture(event.pointerId); } catch (_) { /* no-op */ }
     this.finishStroke(); this.renderOverlay();
@@ -1233,6 +1612,7 @@ class TerrainEditor {
     const settings = this.brushSettings(); const distance = Math.hypot(end.x - start.x, end.z - start.z);
     const steps = Math.max(1, Math.ceil(distance / Math.max(0.7, settings.radius * 0.28)));
     for (let step = 0; step <= steps; step += 1) { const t = step / steps; this.paintDisk(start.x + (end.x - start.x) * t, start.z + (end.z - start.z) * t, settings); }
+    if (settings.plateauMode && settings.plateau.action === 'restore') this.regeneratePlateauLayer();
     this.markDirty(); this.scheduleRender();
   }
 
@@ -1258,12 +1638,16 @@ class TerrainEditor {
       } else if (kind === 'category' || kind === 'material') {
         if (action === 'erase') this.setCell(index, 0); else if (alpha >= 0.2) this.setCell(index, value);
       } else if (kind === 'plateau') {
-        if (!this.strokeBaseValues?.has(index)) this.strokeBaseValues?.set(index, current);
+        const restoringBase = plateau?.action === 'restore';
+        const plateauLayer = restoringBase ? this.plateauBaseLayer : layer;
+        const plateauCurrent = plateauLayer[index];
+        if (!this.strokeBaseValues?.has(index)) this.strokeBaseValues?.set(index, plateauCurrent);
         const previousInfluence = this.strokeInfluence?.get(index) || 0;
         if (alpha <= previousInfluence + 0.0001) continue;
         this.strokeInfluence?.set(index, alpha);
-        const source = this.strokeBaseValues?.get(index) ?? current;
-        this.setCell(index, source + (value - source) * alpha);
+        const source = this.strokeBaseValues?.get(index) ?? plateauCurrent;
+        const nextValue = source + (value - source) * alpha;
+        if (restoringBase) this.setPlateauBaseCell(index, nextValue); else this.setCell(index, nextValue);
       } else if (kind === 'modifier') {
         const accumulate = $('stroke-accumulation').checked || action === 'smooth';
         let source = current; let effectiveAlpha = alpha;
@@ -1296,6 +1680,13 @@ class TerrainEditor {
   }
 
   finishStroke() {
+    if (this.plateauStrokeSettings) { this.finishPlateauObjectStroke(); this.plateauBaseChanges = null; this.updateHistory(); return; }
+    if (this.plateauBaseChanges) {
+      const changes = [];
+      for (const [index, oldValue] of this.plateauBaseChanges.entries()) { const newValue = this.plateauBaseLayer[index]; if (oldValue !== newValue) changes.push([index, oldValue, newValue]); }
+      if (changes.length) this.pushHistory({ type: 'plateauBaseCells', changes });
+      this.plateauBaseChanges = null; this.currentChanges = null; this.strokeBaseValues = null; this.strokeInfluence = null; this.updateHistory(); return;
+    }
     if (!this.currentChanges) return; const changes = [];
     for (const [index, oldValue] of this.currentChanges.entries()) { const newValue = this.layers[this.activeLayer][index]; if (oldValue !== newValue) changes.push([index, oldValue, newValue]); }
     if (changes.length) this.pushHistory({ type: 'cells', layer: this.activeLayer, changes });
@@ -1306,6 +1697,13 @@ class TerrainEditor {
 
   applyOperation(operation, direction) {
     if (operation.type === 'cells') { const layer = this.layers[operation.layer]; for (const [index, oldValue, newValue] of operation.changes) layer[index] = direction === 'undo' ? oldValue : newValue; if (operation.layer === 'playable') { this.playableBoundaryCache = null; this.playableBoundaryPathCache = null; } }
+    else if (operation.type === 'plateauBaseCells') { for (const [index, oldValue, newValue] of operation.changes) this.plateauBaseLayer[index] = direction === 'undo' ? oldValue : newValue; this.regeneratePlateauLayer(); }
+    else if (operation.type === 'plateauObjects') { this.plateauObjects = structuredClone(direction === 'undo' ? operation.before : operation.after); this.selectedPlateauId = this.plateauObjects.some((item) => item.id === operation.selectedId) ? operation.selectedId : null; this.regeneratePlateauLayer(); if (this.selectedPlateau()) this.loadPlateauIntoControls(this.selectedPlateau()); else this.clearPlateauSelection(false); }
+    else if (operation.type === 'heightBaseStateV2') {
+      for (const [index, oldValue, newValue] of operation.baseChanges) this.plateauBaseLayer[index] = direction === 'undo' ? oldValue : newValue;
+      this.plateauObjects = structuredClone(direction === 'undo' ? operation.objectsBefore : operation.objectsAfter);
+      this.roadRamps = structuredClone(direction === 'undo' ? operation.rampsBefore : operation.rampsAfter); this.selectedPlateauId = null; this.selectedRoadRampId = null; this.cancelRoadRampDraft(false); this.regeneratePlateauLayer(); this.renderRoadRampList();
+    }
     else if (operation.type === 'markers') this.markers = structuredClone(direction === 'undo' ? operation.before : operation.after);
     else if (operation.type === 'roadRamps') { this.roadRamps = structuredClone(direction === 'undo' ? operation.before : operation.after); this.selectedRoadRampId = null; this.cancelRoadRampDraft(false); this.renderRoadRampList(); }
     else if (operation.type === 'waterCourses') { this.waterCourses = structuredClone(direction === 'undo' ? operation.before : operation.after); this.selectedWaterCourseId = null; this.cancelWaterCourseDraft(false); this.renderWaterCourseList(); }
@@ -1342,12 +1740,14 @@ class TerrainEditor {
       this.renderRoadRampList(); this.updateHistory(); this.render(); return;
     }
     if (this.activeLayer === 'height_base') {
-      if (!confirm('¿Restaurar la altura base y eliminar todas las rampas de meseta? Las rampas viales se conservarán.')) return;
-      const layer = this.layers.height_base; const changes = []; const rampsBefore = structuredClone(this.roadRamps);
-      for (let index = 0; index < layer.length; index += 1) if (layer[index] !== 128) { changes.push([index, layer[index], 128]); layer[index] = 128; }
+      if (!confirm('¿Restaurar la altura base, eliminar las mesetas editables y todas las rampas de meseta? Las rampas viales se conservarán.')) return;
+      const baseChanges = []; const objectsBefore = structuredClone(this.plateauObjects); const rampsBefore = structuredClone(this.roadRamps);
+      for (let index = 0; index < this.plateauBaseLayer.length; index += 1) if (this.plateauBaseLayer[index] !== 128) { baseChanges.push([index, this.plateauBaseLayer[index], 128]); this.plateauBaseLayer[index] = 128; }
+      this.plateauObjects = []; this.selectedPlateauId = null;
       this.roadRamps = this.roadRamps.filter((ramp) => (ramp.kind || 'road') === 'road'); const rampsAfter = structuredClone(this.roadRamps); this.cancelRoadRampDraft(false); this.selectedRoadRampId = null;
-      if (changes.length || rampsBefore.length !== rampsAfter.length) this.pushHistory({ type: 'heightBaseState', changes, rampsBefore, rampsAfter });
-      this.renderRoadRampList(); this.updateHistory(); this.render(); return;
+      this.regeneratePlateauLayer();
+      if (baseChanges.length || objectsBefore.length || rampsBefore.length !== rampsAfter.length) this.pushHistory({ type: 'heightBaseStateV2', baseChanges, objectsBefore, objectsAfter: [], rampsBefore, rampsAfter });
+      this.renderRoadRampList(); this.updatePlateauUi(); this.updateHistory(); this.render(); return;
     }
     if (this.activeLayer === 'water') {
       if (!confirm('¿Vaciar el agua pintada y eliminar todos los ríos libres?')) return;
@@ -1460,13 +1860,41 @@ class TerrainEditor {
       }
       const offset = index * 4; data[offset] = clamp(r, 0, 255); data[offset + 1] = clamp(g, 0, 255); data[offset + 2] = clamp(b, 0, 255); data[offset + 3] = 255;
     }
-    this.ctx.putImageData(image, 0, 0); this.renderOverlay();
+    this.ctx.putImageData(image, 0, 0); this.renderReference(); this.renderOverlay();
+  }
+
+
+  drawPlateauSelection(ctx) {
+    if (this.activeLayer !== 'height_base' || $('plateau-tool-mode').value !== 'select') return;
+    const object = this.selectedPlateau(); if (!object?.points?.length) return;
+    const settings = normalizePlateauSettings({
+      targetHeight: object.target_height,
+      plateauRadius: object.plateau_radius,
+      slopeWidth: object.slope_width,
+      supportEnabled: object.support_enabled,
+      supportWidth: object.support_width,
+      supportHeightPercent: object.support_height_percent,
+      minHeight: $('min-height').value,
+      maxHeight: $('max-height').value,
+    });
+    const trace = () => {
+      ctx.beginPath();
+      if (object.points.length === 1) ctx.arc(object.points[0].x, object.points[0].z, 0.01, 0, Math.PI * 2);
+      else { ctx.moveTo(object.points[0].x, object.points[0].z); for (const point of object.points.slice(1)) ctx.lineTo(point.x, point.z); }
+    };
+    ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    if (settings.supportEnabled) { ctx.strokeStyle = '#66df8b55'; ctx.lineWidth = settings.radius * 2; trace(); ctx.stroke(); }
+    ctx.strokeStyle = '#ffffff66'; ctx.lineWidth = settings.slopeEndRadius * 2; trace(); ctx.stroke();
+    ctx.strokeStyle = '#ffdc7888'; ctx.lineWidth = settings.plateauRadius * 2; trace(); ctx.stroke();
+    ctx.strokeStyle = '#fff3b8'; ctx.lineWidth = Math.max(1.2, this.width / 420); ctx.setLineDash([Math.max(2, this.width / 320), Math.max(2, this.width / 320)]); trace(); ctx.stroke();
+    ctx.restore();
   }
 
   renderOverlay() {
     const ctx = this.overlayCtx; ctx.clearRect(0, 0, this.width, this.length);
     if ($('mountain-canvas-guide').checked) this.drawMountainGuide(ctx);
     this.drawRoadRamps(ctx);
+    this.drawPlateauSelection(ctx);
     this.drawWaterCourses(ctx);
     this.drawStructurePlacements(ctx);
     for (const marker of this.markers) {
@@ -1483,7 +1911,7 @@ class TerrainEditor {
       const settings = this.structureSettings(); const radius = settings.brushSize / 2; ctx.save(); ctx.strokeStyle = settings.mode === 'erase' ? '#ff7878ee' : '#79dc8bee'; ctx.lineWidth = Math.max(.9, this.width / 600); ctx.setLineDash(settings.mode === 'populate' ? [Math.max(2, this.width / 450), Math.max(2, this.width / 450)] : []); ctx.beginPath(); ctx.arc(this.hover.x + .5, this.hover.z + .5, radius, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
     }
     if ($('grid-toggle').checked) { ctx.strokeStyle = '#ffffff24'; ctx.lineWidth = .5; const step = 16; for (let x = 0; x <= this.width; x += step) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, this.length); ctx.stroke(); } for (let z = 0; z <= this.length; z += step) { ctx.beginPath(); ctx.moveTo(0, z); ctx.lineTo(this.width, z); ctx.stroke(); } }
-    if (this.hover && !this.markerTool && !this.plateauPickHeight && !this.activeRampKind() && !(this.activeLayer === 'water' && $('water-tool-mode').value === 'river') && this.activeLayer !== 'structures') {
+    if (this.hover && !this.referenceEditingActive() && !this.markerTool && !this.plateauPickHeight && !this.activeRampKind() && !(this.activeLayer === 'height_base' && $('plateau-tool-mode').value === 'select') && !(this.activeLayer === 'water' && $('water-tool-mode').value === 'river') && this.activeLayer !== 'structures') {
       const settings = this.brushSettings(); const radius = settings.radius; const coreRadius = settings.coreRadius; const square = !settings.plateauMode && $('brush-shape').value === 'square';
       const drawProfileRing = (ringRadius, color, dash = []) => { if (ringRadius <= 0.15) return; ctx.setLineDash(dash); ctx.strokeStyle = color; ctx.beginPath(); if (square) ctx.rect(this.hover.x - ringRadius, this.hover.z - ringRadius, ringRadius * 2, ringRadius * 2); else ctx.arc(this.hover.x, this.hover.z, ringRadius, 0, Math.PI * 2); ctx.stroke(); };
       ctx.lineWidth = Math.max(.8, this.width / 600);
@@ -1526,8 +1954,14 @@ class TerrainEditor {
     this.markers = this.markers.map((marker) => ({ ...marker, x: Math.round(marker.x / Math.max(1, oldWidth - 1) * (newWidth - 1)), z: Math.round(marker.z / Math.max(1, oldLength - 1) * (newLength - 1)) }));
     this.roadRamps = this.roadRamps.map((ramp) => ({ ...ramp, points: ramp.points.map((point) => ({ x: point.x / Math.max(1, oldWidth - 1) * (newWidth - 1), z: point.z / Math.max(1, oldLength - 1) * (newLength - 1) })) }));
     this.waterCourses = this.waterCourses.map((course) => ({ ...course, points: course.points.map((point) => ({ x: point.x / Math.max(1, oldWidth - 1) * (newWidth - 1), z: point.z / Math.max(1, oldLength - 1) * (newLength - 1) })) }));
+    const oldPlateauBase = this.plateauBaseLayer; const resizedPlateauBase = new Uint8Array(newWidth * newLength);
+    for (let z = 0; z < newLength; z += 1) { const sourceZ = Math.min(oldLength - 1, Math.round(z / Math.max(1, newLength - 1) * (oldLength - 1))); for (let x = 0; x < newWidth; x += 1) { const sourceX = Math.min(oldWidth - 1, Math.round(x / Math.max(1, newWidth - 1) * (oldWidth - 1))); resizedPlateauBase[z * newWidth + x] = oldPlateauBase[sourceZ * oldWidth + sourceX]; } }
+    this.plateauBaseLayer = resizedPlateauBase; const plateauScale = Math.min(newWidth / oldWidth, newLength / oldLength);
+    this.plateauObjects = this.plateauObjects.map((object) => ({ ...object, points: object.points.map((point) => ({ x: point.x / Math.max(1, oldWidth - 1) * (newWidth - 1), z: point.z / Math.max(1, oldLength - 1) * (newLength - 1) })), plateau_radius: object.plateau_radius * plateauScale, slope_width: object.slope_width * plateauScale, support_width: object.support_width * plateauScale }));
+    this.selectedPlateauId = null;
     this.structurePlacements = this.structurePlacements.map((item) => ({ ...item, x: Math.round(item.x / Math.max(1, oldWidth - 1) * (newWidth - 1)), z: Math.round(item.z / Math.max(1, oldLength - 1) * (newLength - 1)) }));
-    this.width = newWidth; this.length = newLength; this.playableBoundaryCache = null; this.playableBoundaryPathCache = null; this.canvas.width = newWidth; this.canvas.height = newLength; this.overlay.width = newWidth; this.overlay.height = newLength; this.undoStack.length = 0; this.redoStack.length = 0; this.applyZoom(); this.markDirty(); this.render(); this.renderMarkers(); this.updateSizeInfo(); this.updateHistory(); this.updateMountainUi(); this.updatePlateauUi(); this.renderRoadRampList(); this.renderWaterCourseList(); this.updateWaterUi(); this.refreshStructureCollectionSelect(); this.updateStructureUi();
+    if (this.referenceGuide) { const scale = Math.min(newWidth / oldWidth, newLength / oldLength); this.referenceGuide.x = this.referenceGuide.x / oldWidth * newWidth; this.referenceGuide.z = this.referenceGuide.z / oldLength * newLength; this.referenceGuide.fit_width *= scale; this.referenceGuide.fit_height *= scale; }
+    this.width = newWidth; this.length = newLength; this.playableBoundaryCache = null; this.playableBoundaryPathCache = null; this.canvas.width = newWidth; this.canvas.height = newLength; this.referenceCanvas.width = newWidth; this.referenceCanvas.height = newLength; this.overlay.width = newWidth; this.overlay.height = newLength; this.regeneratePlateauLayer(); this.undoStack.length = 0; this.redoStack.length = 0; this.updateReferenceUi(); this.applyZoom(); this.markDirty(); this.render(); this.renderMarkers(); this.updateSizeInfo(); this.updateHistory(); this.updateMountainUi(); this.updatePlateauUi(); this.renderRoadRampList(); this.renderWaterCourseList(); this.updateWaterUi(); this.refreshStructureCollectionSelect(); this.updateStructureUi();
   }
 
   updateSizeInfo() { $('project-size').textContent = `${this.width} × ${this.length} celdas`; $('width').value = this.width; $('length').value = this.length; }
@@ -1558,14 +1992,20 @@ class TerrainEditor {
     };
   }
 
-  projectDocument() {
+  projectDocument(includeReference = true) {
     const layers = {}; for (const [name, array] of Object.entries(this.layers)) layers[name] = { encoding: 'rle-u8', data: encodeRle(array) };
     const structures = this.projectStructureSnapshot();
-    return { format: 'jkr-terrain-project', version: 2, config: this.collectConfig(), layers, markers: structuredClone(this.markers), road_ramps: structuredClone(this.roadRamps), water_courses: structuredClone(this.waterCourses), structure_assets: structuredClone(structures.assets), structure_collections: structuredClone(structures.collections), structure_placements: structuredClone(structures.placements) };
+    const document = { format: 'jkr-terrain-project', version: 2, config: this.collectConfig(), layers, markers: structuredClone(this.markers), road_ramps: structuredClone(this.roadRamps), water_courses: structuredClone(this.waterCourses), structure_assets: structuredClone(structures.assets), structure_collections: structuredClone(structures.collections), structure_placements: structuredClone(structures.placements) };
+    if (includeReference) {
+      if (this.referenceGuide?.data_url) document.reference_image = this.referenceSnapshot();
+      document.plateau_objects = structuredClone(this.plateauObjects);
+      document.plateau_base_layer = { encoding: 'rle-u8', data: encodeRle(this.plateauBaseLayer) };
+    }
+    return document;
   }
 
   saveProject() {
-    try { const project = this.projectDocument(); downloadJson(`${project.config.name}.jkrterrain.json`, project); this.dirty = false; $('dirty-badge').textContent = 'Guardado'; $('dirty-badge').className = 'badge ok'; this.message('Proyecto guardado.'); }
+    try { if ($('plateau-tool-mode').value === 'select' && this.selectedPlateau()) this.applySelectedPlateauEdit({ silent: true }); const project = this.projectDocument(); downloadJson(`${project.config.name}.jkrterrain.json`, project); this.dirty = false; $('dirty-badge').textContent = 'Guardado'; $('dirty-badge').className = 'badge ok'; this.message('Proyecto guardado.'); }
     catch (error) { this.message(error.message, true); }
   }
 
@@ -1576,9 +2016,11 @@ class TerrainEditor {
       const config = project.config; const width = Number(config.width); const length = Number(config.length); const expected = width * length;
       if (width < MIN_MAP_SIZE || width > MAX_MAP_SIZE || length < MIN_MAP_SIZE || length > MAX_MAP_SIZE || width % 16 || length % 16) throw new Error('Dimensiones inválidas.');
       const decoded = {}; for (const name of Object.keys(LAYERS)) { if (!project.layers?.[name]) { if (name === 'structures') { decoded[name] = new Uint8Array(expected); continue; } throw new Error(`Falta la capa ${name}.`); } decoded[name] = decodeRle(project.layers[name].data, expected); }
-      this.width = width; this.length = length; this.layers = decoded; this.markers = Array.isArray(project.markers) ? project.markers : []; this.roadRamps = Array.isArray(project.road_ramps) ? project.road_ramps.map((ramp) => ({ kind: ramp.kind === 'terrain' ? 'terrain' : 'road', ...ramp })) : []; this.waterCourses = Array.isArray(project.water_courses) ? project.water_courses : []; this.structureAssets = Array.isArray(project.structure_assets) ? project.structure_assets : []; this.structureCollections = Array.isArray(project.structure_collections) ? project.structure_collections : []; this.structurePlacements = Array.isArray(project.structure_placements) ? project.structure_placements : []; this.roadRampDraft = []; this.roadRampDraftKind = null; this.roadRampEditingId = null; this.selectedRoadRampId = null; this.waterCourseDraft = []; this.waterCourseEditingId = null; this.selectedWaterCourseId = null; this.playableBoundaryCache = null; this.playableBoundaryPathCache = null; for (const name of Object.keys(LAYERS)) { this.visibility[name] = true; this.locked[name] = false; } this.buildLayerList();
+      const plateauBase = project.plateau_base_layer?.data ? decodeRle(project.plateau_base_layer.data, expected) : decoded.height_base.slice();
+      const plateauObjects = Array.isArray(project.plateau_objects) ? project.plateau_objects.map((object) => normalizePlateauObject(object, Number(config.min_height), Number(config.max_height))).filter((object) => object.id && object.points.length) : [];
+      this.width = width; this.length = length; this.layers = decoded; this.plateauBaseLayer = plateauBase; this.plateauObjects = plateauObjects; this.selectedPlateauId = null; this.markers = Array.isArray(project.markers) ? project.markers : []; this.roadRamps = Array.isArray(project.road_ramps) ? project.road_ramps.map((ramp) => ({ kind: ramp.kind === 'terrain' ? 'terrain' : 'road', ...ramp })) : []; this.waterCourses = Array.isArray(project.water_courses) ? project.water_courses.map((course) => ({ river_style: course.river_style || 'natural', cascade_incline_ratio: course.cascade_incline_ratio ?? 0, ...course })) : []; this.structureAssets = Array.isArray(project.structure_assets) ? project.structure_assets : []; this.structureCollections = Array.isArray(project.structure_collections) ? project.structure_collections : []; this.structurePlacements = Array.isArray(project.structure_placements) ? project.structure_placements : []; this.roadRampDraft = []; this.roadRampDraftKind = null; this.roadRampEditingId = null; this.selectedRoadRampId = null; this.waterCourseDraft = []; this.waterCourseEditingId = null; this.selectedWaterCourseId = null; this.playableBoundaryCache = null; this.playableBoundaryPathCache = null; for (const name of Object.keys(LAYERS)) { this.visibility[name] = true; this.locked[name] = false; } this.buildLayerList();
       try { await this.loadStructureLibrary({ merge: true }); } catch (error) { this.setLibraryStatus(`Sin conexión: ${error.message}`, true); }
-      this.canvas.width = width; this.canvas.height = length; this.overlay.width = width; this.overlay.height = length; this.setConfigInputs(config); this.undoStack.length = 0; this.redoStack.length = 0; this.applyZoom(); this.render(); this.renderMarkers(); this.updateSizeInfo(); this.updateHistory(); this.updatePlateauUi(); this.renderRoadRampList(); this.renderWaterCourseList(); this.updateWaterUi(); this.refreshStructureCollectionSelect(); this.updateStructureUi(); this.dirty = false; $('dirty-badge').textContent = 'Cargado'; $('dirty-badge').className = 'badge ok'; this.message(`Proyecto ${file.name} cargado.`);
+      this.canvas.width = width; this.canvas.height = length; this.referenceCanvas.width = width; this.referenceCanvas.height = length; this.overlay.width = width; this.overlay.height = length; this.setConfigInputs(config); this.regeneratePlateauLayer(); this.undoStack.length = 0; this.redoStack.length = 0; try { await this.loadReferenceSnapshot(project.reference_image || null); } catch (referenceError) { console.warn(referenceError); await this.loadReferenceSnapshot(null); this.message(`Proyecto cargado, pero la referencia no pudo abrirse: ${referenceError.message}`, true); } this.applyZoom(); this.render(); this.renderMarkers(); this.updateSizeInfo(); this.updateHistory(); this.updatePlateauUi(); this.renderRoadRampList(); this.renderWaterCourseList(); this.updateWaterUi(); this.refreshStructureCollectionSelect(); this.updateStructureUi(); this.dirty = false; $('dirty-badge').textContent = 'Cargado'; $('dirty-badge').className = 'badge ok'; this.message(`Proyecto ${file.name} cargado.`);
     } catch (error) { this.message(`No se pudo abrir: ${error.message}`, true); }
     finally { event.target.value = ''; }
   }
@@ -1595,15 +2037,15 @@ class TerrainEditor {
     if (this.dirty && !confirm('Crear un proyecto nuevo descartará los cambios no guardados.')) return;
     this.width = Number($('width').value) || 256; this.length = Number($('length').value) || 256;
     this.playableBoundaryCache = null; this.playableBoundaryPathCache = null; this.initializeLayers(); this.buildLayerList();
-    this.markers = []; this.roadRamps = []; this.waterCourses = []; this.structureAssets = []; this.structureCollections = []; this.structurePlacements = []; this.libraryCollectionIds = new Set();
-    this.roadRampDraft = []; this.roadRampDraftKind = null; this.roadRampEditingId = null; this.selectedRoadRampId = null; this.waterCourseDraft = []; this.waterCourseEditingId = null; this.selectedWaterCourseId = null;
-    this.undoStack.length = 0; this.redoStack.length = 0; this.canvas.width = this.width; this.canvas.height = this.length; this.overlay.width = this.width; this.overlay.height = this.length;
+    this.markers = []; this.roadRamps = []; this.waterCourses = []; this.structureAssets = []; this.structureCollections = []; this.structurePlacements = []; this.libraryCollectionIds = new Set(); this.referenceGuide = null; this.referenceImage = null; this.referenceDragging = false; this.referenceDragStart = null;
+    this.roadRampDraft = []; this.roadRampDraftKind = null; this.roadRampEditingId = null; this.selectedRoadRampId = null; this.waterCourseDraft = []; this.waterCourseEditingId = null; this.selectedWaterCourseId = null; this.plateauStrokePoints = []; this.plateauStrokeSettings = null; this.plateauObjectsBeforeStroke = null; this.plateauBaseChanges = null; this.selectedPlateauId = null;
+    this.undoStack.length = 0; this.redoStack.length = 0; this.canvas.width = this.width; this.canvas.height = this.length; this.referenceCanvas.width = this.width; this.referenceCanvas.height = this.length; this.overlay.width = this.width; this.overlay.height = this.length;
     try { await this.loadStructureLibrary({ merge: false }); } catch (error) { this.setLibraryStatus(`Sin conexión: ${error.message}`, true); }
-    this.applyZoom(); this.markDirty(); this.render(); this.renderMarkers(); this.updateSizeInfo(); this.updateHistory(); this.updateMountainUi(); this.updatePlateauUi(); this.renderRoadRampList(); this.renderWaterCourseList(); this.updateWaterUi(); this.refreshStructureCollectionSelect(); this.updateStructureUi(); this.message('Proyecto nuevo creado con la biblioteca central disponible.');
+    $('reference-edit-mode').checked = false; this.updateReferenceUi(); this.applyZoom(); this.markDirty(); this.render(); this.renderMarkers(); this.updateSizeInfo(); this.updateHistory(); this.updateMountainUi(); this.updatePlateauUi(); this.renderRoadRampList(); this.renderWaterCourseList(); this.updateWaterUi(); this.refreshStructureCollectionSelect(); this.updateStructureUi(); this.message('Proyecto nuevo creado con la biblioteca central disponible.');
   }
 
   async compile(exportSchematic) {
-    let project; try { project = this.projectDocument(); } catch (error) { this.message(error.message, true); return; }
+    let project; try { if ($('plateau-tool-mode').value === 'select' && this.selectedPlateau()) this.applySelectedPlateauEdit({ silent: true }); this.regeneratePlateauLayer(); project = this.projectDocument(false); } catch (error) { this.message(error.message, true); return; }
     const button = exportSchematic ? $('export-schematic') : $('compile-preview'); const original = button.textContent; button.disabled = true; button.textContent = exportSchematic ? 'Exportando…' : 'Compilando…'; this.message('Compilando capas…');
     try {
       const response = await fetch('/api/compile', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project, export_schematic: exportSchematic }) });

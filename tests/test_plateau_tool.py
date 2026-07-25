@@ -104,3 +104,80 @@ def test_slope_and_support_have_independent_limits():
     assert 0 < result["influence"][3] < 0.3
     assert result["influence"][4] == 0
     assert result["influence"][5] == 0
+
+
+def run_plateau_objects(objects: list[dict], probes: list[tuple[int, int]]) -> dict:
+    module = Path(__file__).parents[1] / "app" / "static" / "plateau-tool.js"
+    script = f"""
+      import {{ rasterizePlateauObjects, plateauObjectContainsPoint }} from {json.dumps(module.as_uri())};
+      const width = 32; const length = 32;
+      const base = new Uint8Array(width * length); base.fill(128);
+      const objects = {json.dumps(objects)};
+      const rendered = rasterizePlateauObjects(base, width, length, objects, 18, 120);
+      const probes = {json.dumps(probes)};
+      console.log(JSON.stringify({{
+        values: probes.map(([x, z]) => rendered[z * width + x]),
+        hits: probes.map(([x, z]) => objects.map((item) => plateauObjectContainsPoint(item, {{ x, z }}, 18, 120))),
+      }}));
+    """
+    completed = subprocess.run(
+        ["node", "--input-type=module", "-e", script],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return json.loads(completed.stdout)
+
+
+def test_editable_plateau_regenerates_without_leaving_old_radius():
+    large = {
+        "id": "p1",
+        "points": [{"x": 16, "z": 16}],
+        "target_height": 90,
+        "plateau_radius": 6,
+        "slope_width": 0,
+        "support_enabled": False,
+        "support_width": 0,
+        "support_height_percent": 0,
+    }
+    small = {**large, "plateau_radius": 3}
+    before = run_plateau_objects([large], [(16, 16), (21, 16)])
+    after = run_plateau_objects([small], [(16, 16), (21, 16)])
+    assert before["values"][0] > 128
+    assert before["values"][1] > 128
+    assert after["values"][0] > 128
+    assert after["values"][1] == 128
+
+
+def test_editable_plateau_height_can_be_changed_with_same_shape():
+    low = {
+        "id": "p1",
+        "points": [{"x": 10, "z": 10}, {"x": 18, "z": 10}],
+        "target_height": 65,
+        "plateau_radius": 4,
+        "slope_width": 2,
+        "support_enabled": True,
+        "support_width": 3,
+        "support_height_percent": 25,
+    }
+    high = {**low, "target_height": 100}
+    low_result = run_plateau_objects([low], [(10, 10), (14, 10), (18, 10)])
+    high_result = run_plateau_objects([high], [(10, 10), (14, 10), (18, 10)])
+    assert all(high_value > low_value for high_value, low_value in zip(high_result["values"], low_result["values"], strict=True))
+
+
+def test_plateau_selection_uses_existing_full_profile_radius():
+    plateau = {
+        "id": "p1",
+        "points": [{"x": 16, "z": 16}],
+        "target_height": 90,
+        "plateau_radius": 4,
+        "slope_width": 3,
+        "support_enabled": True,
+        "support_width": 4,
+        "support_height_percent": 25,
+    }
+    result = run_plateau_objects([plateau], [(16, 16), (26, 16), (28, 16)])
+    assert result["hits"][0] == [True]
+    assert result["hits"][1] == [True]
+    assert result["hits"][2] == [False]

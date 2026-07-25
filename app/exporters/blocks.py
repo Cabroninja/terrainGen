@@ -18,6 +18,7 @@ PALETTE: dict[str, int] = {
     "minecraft:gravel": 7,
     "minecraft:water[level=0]": 8,
     "minecraft:coarse_dirt": 9,
+    "minecraft:water[level=8]": 10,
 }
 
 BLOCK_NAME_BY_ID = {value: key for key, value in PALETTE.items()}
@@ -46,6 +47,7 @@ BLOCK_COLORS: dict[int, tuple[float, float, float, float]] = {
     PALETTE["minecraft:gravel"]: (0.54, 0.53, 0.51, 1.0),
     PALETTE["minecraft:water[level=0]"]: (0.17, 0.43, 0.76, 0.58),
     PALETTE["minecraft:coarse_dirt"]: (0.48, 0.35, 0.22, 1.0),
+    PALETTE["minecraft:water[level=8]"]: (0.15, 0.39, 0.72, 0.54),
 }
 
 
@@ -64,6 +66,7 @@ def block_id_at_y(
     water: bool,
     config: ProjectConfig,
     water_surface_y: int | None = None,
+    falling_water: bool = False,
 ) -> int:
     """Return the exact block id used by the schematic generator for one cell."""
     if y < 0 or y >= config.schematic_height:
@@ -74,6 +77,8 @@ def block_id_at_y(
         return PALETTE["minecraft:stone"] if y <= surface_y else PALETTE["minecraft:air"]
     resolved_water_surface = config.sea_level if water_surface_y is None else int(water_surface_y)
     if water and surface_y < y <= resolved_water_surface:
+        if falling_water and y < resolved_water_surface:
+            return PALETTE["minecraft:water[level=8]"]
         return PALETTE["minecraft:water[level=0]"]
     if y > surface_y:
         return PALETTE["minecraft:air"]
@@ -102,6 +107,7 @@ def build_block_layer(config: ProjectConfig, terrain, y: int) -> np.ndarray:
     surface = terrain.height.astype(np.int32)
     water = terrain.water_mask > 0
     water_surface = terrain.water_surface.astype(np.int32)
+    falling_water = getattr(terrain, "water_fall_mask", np.zeros_like(terrain.water_mask)) > 0
     playable = terrain.playable_mask > 0
     if y == 0:
         layer[:] = PALETTE["minecraft:bedrock"]
@@ -114,7 +120,9 @@ def build_block_layer(config: ProjectConfig, terrain, y: int) -> np.ndarray:
     if np.any(top):
         for material_code, block_index in TOP_BLOCK.items():
             layer[top & (terrain.material == material_code)] = block_index
-    layer[water & (y > surface) & (y <= water_surface)] = PALETTE["minecraft:water[level=0]"]
+    water_cells = water & (y > surface) & (y <= water_surface)
+    layer[water_cells] = PALETTE["minecraft:water[level=0]"]
+    layer[water_cells & falling_water & (y < water_surface)] = PALETTE["minecraft:water[level=8]"]
     layer[(~playable) & (y <= surface)] = PALETTE["minecraft:stone"]
     structure_layer = getattr(terrain, "structure_blocks_by_y", {}).get(y)
     if structure_layer:

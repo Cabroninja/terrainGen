@@ -44,3 +44,25 @@ def test_dimensions_above_new_limit_are_rejected():
     payload["config"]["width"] = 2064
     with pytest.raises(ValidationError):
         ProjectDocument.model_validate(payload)
+
+
+
+def test_optional_reference_image_is_preserved():
+    payload = project_payload()
+    payload["reference_image"] = {
+        "name": "boceto.png",
+        "data_url": "data:image/png;base64," + ("A" * 32),
+        "x": 64,
+        "z": 80,
+        "fit_width": 128,
+        "fit_height": 96,
+        "scale": 1.25,
+        "rotation": 12,
+        "opacity": 0.4,
+        "visible": True,
+        "locked": False,
+    }
+    project = ProjectDocument.model_validate(payload)
+    assert project.reference_image is not None
+    assert project.reference_image.name == "boceto.png"
+    assert project.reference_image.scale == 1.25

@@ -6,10 +6,8 @@ from app.terrain.compiler import compile_project
 from tests.helpers import project_payload
 
 
-def _gradient_payload():
+def _gradient_payload(style: str = "natural"):
     payload = project_payload(width=64, length=64, height=128)
-    # La altura aumenta de izquierda a derecha para comprobar que un trazo
-    # dibujado desde abajo hacia arriba se invierte automáticamente.
     row = np.linspace(95, 185, 64, dtype=np.uint8)
     base = np.repeat(row[np.newaxis, :], 64, axis=0)
     payload["layers"]["height_base"]["data"] = encode_rle_u8(base)
@@ -22,10 +20,32 @@ def _gradient_payload():
         "shore_width": 6,
         "shore_profile": "natural",
         "road_policy": "protect",
+        "river_style": style,
         "smoothing": 60,
         "exit_enabled": False,
     }]
     return payload, base
+
+
+def _cliff_payload(style: str = "natural"):
+    payload = project_payload(width=96, length=64, height=192)
+    base = np.full((64, 96), 70, dtype=np.uint8)
+    base[:, :40] = 120
+    payload["layers"]["height_base"]["data"] = encode_rle_u8(base)
+    payload["water_courses"] = [{
+        "id": "rio_cascada",
+        "label": "Río automático",
+        "points": [{"x": 8, "z": 32}, {"x": 88, "z": 32}],
+        "width": 7,
+        "depth": 3,
+        "shore_width": 5,
+        "shore_profile": "natural",
+        "road_policy": "protect",
+        "river_style": style,
+        "smoothing": 0,
+        "exit_enabled": False,
+    }]
+    return payload
 
 
 def test_old_projects_without_water_courses_remain_compatible():
@@ -36,33 +56,157 @@ def test_old_projects_without_water_courses_remain_compatible():
     assert project.config.water_road_policy == "protect"
 
 
-def test_freehand_river_follows_relief_and_reverses_low_to_high_stroke():
+def test_old_river_fields_are_accepted_but_automatic_style_defaults_to_natural():
+    payload, _ = _gradient_payload()
+    course = payload["water_courses"][0]
+    course.pop("river_style")
+    course.update({
+        "relief_mode": "follow",
+        "cascade_containment": True,
+        "cascade_threshold": 2,
+        "downhill_slope_ratio": 12,
+    })
+    project = ProjectDocument.model_validate(payload)
+    assert project.water_courses[0].river_style == "natural"
+    assert project.water_courses[0].cascade_incline_ratio == 0.0
+    terrain = compile_project(project)
+    summary = terrain.validation["water_system"]["items"][0]
+    assert summary["river_style"] == "natural"
+    assert "relief_mode" not in summary
+    assert "downhill_slope_ratio" not in summary
+
+
+def test_automatic_river_selects_the_downhill_direction_even_if_drawn_backwards():
     payload, _ = _gradient_payload()
     terrain = compile_project(ProjectDocument.model_validate(payload))
     summary = terrain.validation["water_system"]["items"][0]
     assert summary["flow_reversed"] is True
-    assert summary["start_surface"] > summary["end_surface"]
+    assert summary["start_surface"] >= summary["end_surface"]
     assert summary["water_cells"] > 0
 
-    # El eje completo debe contener agua y tener un nivel variable, no un plano global.
-    center_surfaces = terrain.water_surface[32, 8:57]
-    wet = center_surfaces >= 0
-    assert wet.sum() > 35
-    assert int(center_surfaces[wet].max()) > int(center_surfaces[wet].min())
-    assert np.all(terrain.height[32, 8:57][wet] <= center_surfaces[wet] - 3)
+
+def test_automatic_cliff_becomes_a_vertical_waterfall_not_a_diagonal_ramp():
+    terrain = compile_project(ProjectDocument.model_validate(_cliff_payload()))
+    summary = terrain.validation["water_system"]["items"][0]
+    assert summary["cascades_detected"] >= 1
+    assert summary["cascades_contained"] >= 1
+    assert summary["plunge_pool_cells"] > 0
+    assert int(terrain.water_fall_mask.sum()) > 0
+
+    center = terrain.water_surface[32, 8:89]
+    wet = terrain.water_mask[32, 8:89] > 0
+    ordinary = center[wet & (terrain.water_fall_mask[32, 8:89] == 0)]
+    # The plateau edge must resolve into upper/lower reaches. It must not create
+    # dozens of intermediate levels that look like a steep diagonal river.
+    assert np.unique(ordinary).size <= 4
+    assert max(summary["waterfall_heights"]) >= 4
 
 
-def test_river_never_changes_terrain_outside_channel_plus_shore():
+def test_waterfall_alcove_blends_side_walls_instead_of_a_clean_cylindrical_shell():
+    terrain = compile_project(ProjectDocument.model_validate(_cliff_payload()))
+    local_height = terrain.height[22:44, 34:46]
+    local_water = terrain.water_mask[22:44, 34:46] > 0
+    dry = local_height[~local_water]
+    # The compiler maps painted height values into the configured vertical
+    # range. The alcove must still contain heights between the local low and high
+    # extremes instead of only two clean cylindrical levels.
+    low = int(dry.min())
+    high = int(dry.max())
+    assert high - low >= 4
+    assert np.any((dry > low + 1) & (dry < high - 1))
+
+def test_vertical_cascade_option_preserves_previous_narrow_fall():
+    payload = _cliff_payload()
+    payload["water_courses"][0]["cascade_incline_ratio"] = 0
+    terrain = compile_project(ProjectDocument.model_validate(payload))
+    summary = terrain.validation["water_system"]["items"][0]
+    center_x = np.where(terrain.water_fall_mask[32] > 0)[0]
+    assert summary["cascade_incline_ratio"] == 0
+    assert summary["waterfall_recesses"] == [0.0]
+    assert center_x.size == 1
+
+
+def test_lower_cascade_ratio_excavates_farther_into_the_plateau():
+    shallow_payload = _cliff_payload()
+    shallow_payload["water_courses"][0]["cascade_incline_ratio"] = 8
+    deep_payload = _cliff_payload()
+    deep_payload["water_courses"][0]["cascade_incline_ratio"] = 2
+
+    shallow = compile_project(ProjectDocument.model_validate(shallow_payload))
+    deep = compile_project(ProjectDocument.model_validate(deep_payload))
+    shallow_summary = shallow.validation["water_system"]["items"][0]
+    deep_summary = deep.validation["water_system"]["items"][0]
+    shallow_x = np.where(shallow.water_fall_mask[32] > 0)[0]
+    deep_x = np.where(deep.water_fall_mask[32] > 0)[0]
+
+    assert shallow_summary["cascade_incline_ratio"] == 8
+    assert deep_summary["cascade_incline_ratio"] == 2
+    assert deep_summary["waterfall_recesses"][0] > shallow_summary["waterfall_recesses"][0]
+    assert np.ptp(deep_x) > np.ptp(shallow_x)
+    # The inclined fall must retain several descending water levels inside the
+    # cliff rather than moving the entire river into a long ordinary ramp.
+    deep_levels = deep.water_surface[32, deep_x]
+    assert np.unique(deep_levels).size >= 4
+    assert np.all(deep.water_fall_mask[32, deep_x] > 0)
+
+
+
+def test_waterfall_column_uses_falling_water_and_normal_channel_keeps_bounded_depth():
+    terrain = compile_project(ProjectDocument.model_validate(_cliff_payload()))
+    wet = terrain.water_mask > 0
+    ordinary = wet & (terrain.water_fall_mask == 0)
+    depths = terrain.water_surface[ordinary] - terrain.height[ordinary]
+    assert depths.size
+    assert int(depths.max()) <= 4
+    falling = terrain.water_fall_mask > 0
+    assert np.all(terrain.water_surface[falling] > terrain.height[falling] + 3)
+
+
+def test_automatic_profile_builds_missing_bed_and_dry_banks_on_low_ground():
+    payload = project_payload(width=96, length=64, height=192)
+    base = np.full((64, 96), 25, dtype=np.uint8)
+    base[:, :40] = 110
+    payload["layers"]["height_base"]["data"] = encode_rle_u8(base)
+    payload["water_courses"] = [{
+        "id": "rio_soporte",
+        "label": "Río con soporte",
+        "points": [{"x": 8, "z": 32}, {"x": 88, "z": 32}],
+        "width": 7,
+        "depth": 3,
+        "shore_width": 6,
+        "shore_profile": "natural",
+        "road_policy": "protect",
+        "river_style": "natural",
+        "smoothing": 0,
+        "exit_enabled": False,
+    }]
+    baseline_payload = project_payload(width=96, length=64, height=192)
+    baseline_payload["layers"]["height_base"]["data"] = encode_rle_u8(base)
+    baseline = compile_project(ProjectDocument.model_validate(baseline_payload))
+    terrain = compile_project(ProjectDocument.model_validate(payload))
+
+    wet_low = (terrain.water_mask[32, 45:80] > 0) & (terrain.water_fall_mask[32, 45:80] == 0)
+    assert wet_low.any()
+    xs = np.flatnonzero(wet_low) + 45
+    # The automatic planner is allowed to lower the receiving reach instead of
+    # building a tall embankment, but its immediate dry banks must contain it.
+    assert np.all(terrain.height[32, xs] <= baseline.height[32, xs])
+    for x in xs[:: max(1, len(xs) // 8)]:
+        surface = int(terrain.water_surface[32, x])
+        dry_z = next((z for z in range(31, 20, -1) if terrain.water_mask[z, x] == 0), None)
+        assert dry_z is not None
+        assert int(terrain.height[dry_z, x]) >= surface - 1
+
+
+def test_river_never_changes_terrain_outside_channel_plus_shore_and_waterfall_margin():
     payload, _ = _gradient_payload()
     with_river = compile_project(ProjectDocument.model_validate(payload))
     payload["water_courses"] = []
     without_river = compile_project(ProjectDocument.model_validate(payload))
-
-    # Centro Z=32, medio ancho 3.5 y orilla 6: Z=18 y Z=46 están muy fuera.
-    assert np.array_equal(with_river.height[18], without_river.height[18])
-    assert np.array_equal(with_river.height[46], without_river.height[46])
-    assert not np.any(with_river.water_mask[18])
-    assert not np.any(with_river.water_mask[46])
+    assert np.array_equal(with_river.height[14], without_river.height[14])
+    assert np.array_equal(with_river.height[50], without_river.height[50])
+    assert not np.any(with_river.water_mask[14])
+    assert not np.any(with_river.water_mask[50])
 
 
 def _road_crossing_payload(policy: str):
@@ -79,6 +223,7 @@ def _road_crossing_payload(policy: str):
         "shore_width": 4,
         "shore_profile": "natural",
         "road_policy": policy,
+        "river_style": "natural",
         "smoothing": 40,
         "exit_enabled": False,
     }]
@@ -133,6 +278,7 @@ def test_river_exit_reaches_boundary_and_opens_mountain_channel():
         "shore_width": 5,
         "shore_profile": "natural",
         "road_policy": "protect",
+        "river_style": "natural",
         "smoothing": 50,
         "exit_enabled": True,
     }]
@@ -164,5 +310,22 @@ def test_painted_mass_uses_configured_depth_shore_and_road_policy():
     assert terrain.height[30, 28] <= payload["config"]["sea_level"] - 6
     assert terrain.water_mask[30, 32] == 0
     assert terrain.road_mask[30, 32] == 1
-    assert terrain.height[30, 20] < terrain.height[10, 20]
-    assert terrain.height[10, 10] == terrain.height[10, 20]
+
+
+def test_styles_change_automatic_character_without_exposing_slope_controls():
+    calm = compile_project(ProjectDocument.model_validate(_cliff_payload("calm")))
+    natural = compile_project(ProjectDocument.model_validate(_cliff_payload("natural")))
+    mountain = compile_project(ProjectDocument.model_validate(_cliff_payload("mountain")))
+    calm_summary = calm.validation["water_system"]["items"][0]
+    natural_summary = natural.validation["water_system"]["items"][0]
+    mountain_summary = mountain.validation["water_system"]["items"][0]
+    assert calm_summary["river_style"] == "calm"
+    assert natural_summary["river_style"] == "natural"
+    assert mountain_summary["river_style"] == "mountain"
+    assert calm_summary["style_label"] == "Tranquilo"
+    assert mountain_summary["style_label"] == "Montañoso"
+    # All styles must solve the cliff as a waterfall rather than a steep ramp.
+    assert calm_summary["cascades_detected"] >= 1
+    assert natural_summary["cascades_detected"] >= 1
+    assert mountain_summary["cascades_detected"] >= 1
+

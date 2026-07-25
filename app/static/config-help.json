@@ -688,13 +688,13 @@
   "plateau_tool_mode": {
     "label": "Herramienta de altura base",
     "category": "Altura base",
-    "technical": "Alterna entre el pincel de meseta absoluta y un objeto de rampa de terreno. La rampa usa el mismo perfil geométrico de las rampas viales, pero no escribe valores en la capa Caminos.",
-    "plain": "Elige Meseta para pintar superficies planas o Rampa sin camino para conectar una meseta únicamente modificando el relieve.",
-    "low": "Meseta: fija una altura absoluta dentro de un radio y su transición.",
-    "high": "Rampa sin camino: crea un corredor ascendente o descendente sin material vial.",
-    "minimum": "Meseta",
-    "maximum": "Rampa sin camino",
-    "rule": "Las rampas sin camino se guardan como objetos del proyecto y solo afectan la altura al compilar."
+    "technical": "Alterna entre el pincel de meseta absoluta, la selección de mesetas editables y los objetos de rampa de terreno. Seleccionar meseta carga los mismos parámetros con los que fue creada para regenerarla sin volver a dibujar.",
+    "plain": "Pinta una meseta nueva, selecciona una meseta creada con esta versión para cambiar su altura, radio, pendiente o soporte, o crea una rampa sin camino.",
+    "low": "Pintar meseta: crea una superficie usando los parámetros actuales.",
+    "high": "Rampa de meseta: conecta alturas sin escribir caminos.",
+    "minimum": "Pintar meseta",
+    "maximum": "Rampa de meseta",
+    "rule": "Las mesetas anteriores a esta actualización permanecen integradas en la capa. Las mesetas nuevas se guardan como objetos editables."
   },
   "plateau_height": {
     "label": "Altura de la meseta",
@@ -953,7 +953,7 @@
     "label": "Herramienta de agua",
     "category": "Agua",
     "technical": "Alterna entre una máscara pintada de nivel global para lagos y un curso libre almacenado como objeto con nivel por celda.",
-    "plain": "Masa sirve para lagos pintados; Río libre permite dibujar un cauce manteniendo el clic.",
+    "plain": "Elige entre pintar una masa de agua o dibujar un río libre. En Río libre solo defines el recorrido horizontal; el perfil vertical se genera automáticamente al compilar.",
     "low": "Masa de agua: superficie horizontal compartida.",
     "high": "Río libre: sigue el relieve desde la cota alta hacia la baja.",
     "minimum": "Masa de agua.",
@@ -1212,5 +1212,122 @@
     "minimum": "Oculta",
     "maximum": "Visible",
     "rule": "Las estructuras se convierten en bloques al compilar la Vista Minecraft y el .schem."
+  },
+  "water_relief_mode": {
+    "label": "Adaptación al relieve",
+    "category": "Ríos libres",
+    "technical": "Controla cómo se calcula la cota superficial del río a lo largo del recorrido dibujado. 'Seguir terreno' usa la altura local muestreada en cada tramo y evita excavar mesetas intermedias como si el río fuera un bulldozer. 'Flujo descendente' obliga a que la superficie del agua nunca suba en la dirección del curso.",
+    "plain": "Úsalo para decidir si el río debe acompañar subidas y bajadas del relieve, o si debe bajar siempre aunque tenga que cortar terreno intermedio.",
+    "low": "Seguir terreno: el cauce mantiene una profundidad parecida respecto al suelo local y se adapta mejor a mesetas, terrazas y rampas.",
+    "high": "Flujo descendente: conserva un descenso continuo. Si activas el soporte de terreno, los descensos fuertes se resuelven como una rampa contenida que excava arriba y rellena abajo.",
+    "rule": "Usa Seguir terreno para acompañar literalmente el relieve. Usa Flujo descendente con soporte para atravesar mesetas manteniendo un cauce contenido."
+  },
+  "water_cascade_containment": {
+    "label": "Soporte de terreno en descensos",
+    "category": "Ríos · Flujo descendente",
+    "technical": "En el modo Flujo descendente, crea un perfil similar al de una rampa cuando el río baja desde una meseta: excava donde sobra terreno y agrega bloques donde falta una base bajo el cauce. También levanta costados locales para contener el agua.",
+    "plain": "Actívalo en Flujo descendente para que el río no quede suspendido ni forme una lámina triangular al salir de una meseta. La aplicación completa el terreno faltante debajo del río.",
+    "low": "Desactivado: Flujo descendente solo excava y puede dejar una columna o lámina de agua demasiado profunda sobre terreno bajo.",
+    "high": "Activado: los descensos fuertes reciben fondo y costados de soporte, como una rampa hidráulica.",
+    "rule": "Solo afecta descensos fuertes del modo Flujo descendente. Seguir terreno no recibe esta modificación."
+  },
+  "water_cascade_threshold": {
+    "label": "Detectar cascada desde",
+    "category": "Ríos · Flujo descendente",
+    "technical": "Diferencia vertical mínima acumulada del perfil descendente para construir un tramo con fondo y costados de soporte.",
+    "plain": "Define cuántos bloques debe bajar el río antes de que Flujo descendente construya una base parecida a una rampa.",
+    "minimum": "2 bloques",
+    "maximum": "16 bloques",
+    "low": "Detecta más escalones como cascadas.",
+    "high": "Solo protege caídas grandes.",
+    "rule": "Solo se utiliza cuando Flujo descendente tiene activado el soporte de terreno."
+  },
+  "water_downhill_slope_ratio": {
+    "label": "Pendiente máxima del descenso 1:X",
+    "category": "Ríos · Flujo descendente",
+    "technical": "Define la longitud horizontal mínima que debe utilizar el cauce para bajar cada bloque de altura en un descenso con soporte. Por ejemplo, 1:4 intenta usar cuatro bloques horizontales por cada bloque vertical.",
+    "plain": "Un número mayor hace que el río baje de forma más larga y suave. Un número menor crea una bajada más corta y empinada.",
+    "minimum": "1:1",
+    "maximum": "1:12",
+    "low": "Descenso corto y pronunciado; puede cortar visualmente una meseta alta.",
+    "high": "Descenso largo y suave; necesita más recorrido dibujado antes y después de la meseta.",
+    "rule": "Si el recorrido no tiene longitud suficiente, la aplicación usa la pendiente más suave posible y muestra una advertencia en Validación."
+  },
+  "water_river_style": {
+    "label": "Estilo del río",
+    "category": "Río automático",
+    "technical": "Selecciona un preset del generador vertical automático. El compilador analiza el relieve de todo el recorrido, determina el sentido del agua y combina cauces suaves, excavación, relleno, cascadas contenidas y pozas receptoras.",
+    "plain": "Tú dibujas el río en el mapa y esta opción indica qué carácter debe tener. No necesitas configurar pendientes ni decidir dónde colocar cascadas.",
+    "low": "Tranquilo: cauces más suaves, pozas amplias y cascadas menos frecuentes.",
+    "high": "Montañoso: acepta más cascadas, gargantas compactas y cambios verticales más marcados.",
+    "rule": "Natural es el valor recomendado para la mayoría de los mapas tipo Albion."
+  },
+  "water_cascade_incline": {
+    "label": "Inclinación de cascada",
+    "category": "Río automático",
+    "technical": "Controla el retroceso horizontal de la caída automática dentro de la meseta. El valor se expresa como 1:X: por cada X bloques verticales, la garganta se introduce aproximadamente un bloque en la montaña. La opción Vertical conserva exactamente el comportamiento anterior.",
+    "plain": "Permite que la cascada no caiga en un ángulo tan recto. Los valores bajos excavan más hacia dentro de la meseta; Vertical mantiene la caída actual.",
+    "low": "Vertical o 1:8: caída casi recta y poca excavación hacia el interior.",
+    "high": "1:2: garganta mucho más retraída dentro de la meseta, adecuada cuando quieres una cascada inclinada y profunda.",
+    "rule": "Este parámetro solo modifica la cavidad y la caída de las cascadas. No cambia la pendiente del cauce normal ni el recorrido dibujado."
+  },
+  "reference_visible": {
+    "label": "Mostrar imagen de referencia",
+    "category": "Imagen de referencia",
+    "technical": "Activa o desactiva el renderizado de la imagen guía sobre el lienzo 2D.",
+    "plain": "Oculta temporalmente la referencia sin eliminarla del proyecto.",
+    "rule": "No afecta la compilación, validación ni exportación del schematic."
+  },
+  "reference_locked": {
+    "label": "Bloquear imagen de referencia",
+    "category": "Imagen de referencia",
+    "technical": "Impide modificar la posición de la imagen mediante arrastre directo sobre el lienzo.",
+    "plain": "Bloquéala cuando termines de alinearla para no moverla accidentalmente.",
+    "rule": "Los campos numéricos también quedan protegidos mientras está bloqueada."
+  },
+  "reference_edit_mode": {
+    "label": "Mover directamente sobre el lienzo",
+    "category": "Imagen de referencia",
+    "technical": "Reserva temporalmente la interacción del lienzo para trasladar la referencia en coordenadas X/Z.",
+    "plain": "Actívalo, arrastra la imagen hasta alinearla y luego desactívalo para volver a pintar.",
+    "rule": "Mientras este modo está activo no se aplican pinceladas al terreno."
+  },
+  "reference_opacity": {
+    "label": "Opacidad de la referencia",
+    "category": "Imagen de referencia",
+    "technical": "Controla la transparencia visual de la imagen guía entre 0 y 100 %.",
+    "plain": "Bájala para ver claramente las capas que estás pintando encima.",
+    "minimum": "0 % (invisible)",
+    "maximum": "100 % (opaca)",
+    "rule": "Un valor entre 25 % y 50 % suele funcionar bien para calcar."
+  },
+  "reference_scale": {
+    "label": "Escala de la referencia",
+    "category": "Imagen de referencia",
+    "technical": "Multiplica proporcionalmente el ancho y alto de ajuste de la imagen.",
+    "plain": "100 % conserva el tamaño obtenido al ajustar; valores mayores agrandan la imagen.",
+    "minimum": "10 %",
+    "maximum": "500 %",
+    "rule": "La proporción original de la imagen siempre se conserva."
+  },
+  "reference_rotation": {
+    "label": "Rotación de la referencia",
+    "category": "Imagen de referencia",
+    "technical": "Rota la imagen alrededor de su centro en grados.",
+    "plain": "Úsalo para alinear planos o bosquejos que estén levemente inclinados.",
+    "minimum": "-180°",
+    "maximum": "180°"
+  },
+  "reference_position_x": {
+    "label": "Posición X de la referencia",
+    "category": "Imagen de referencia",
+    "technical": "Coordenada horizontal del centro de la imagen dentro del mapa.",
+    "plain": "Aumenta el valor para mover la imagen hacia la derecha."
+  },
+  "reference_position_z": {
+    "label": "Posición Z de la referencia",
+    "category": "Imagen de referencia",
+    "technical": "Coordenada vertical del centro de la imagen dentro del mapa.",
+    "plain": "Aumenta el valor para mover la imagen hacia abajo en el lienzo."
   }
 }

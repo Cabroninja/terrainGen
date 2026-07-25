@@ -5,10 +5,10 @@
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1" name="viewport"/>
 <meta content="#1b1d1f" name="theme-color"/>
-<title>JKR Terrain Generator v5.0.0</title>
+<title>JKR Terrain Generator v5.5.0</title>
 <link href="/styles.css" rel="stylesheet"/>
 </head>
-<body><div class="app-shell"><header class="topbar"><div class="brand-block"><button class="brand-button" data-tooltip="Abre la configuración general del proyecto." data-ui-action="project" type="button"><span class="brand-title">JKR Terrain</span><span class="brand-version">v5.0.0</span></button><span class="badge" id="dirty-badge">Sin guardar</span></div><nav aria-label="Acciones del proyecto" class="top-actions"><button data-tooltip="Crea un proyecto nuevo con la configuración inicial." id="new-project">Nuevo</button><label class="button-like" data-tooltip="Abre un proyecto .jkrterrain.json guardado anteriormente.">Abrir<input accept=".json,.jkrterrain.json,application/json" hidden="" id="load-project" type="file"/></label><button data-tooltip="Guarda el proyecto editable con todas sus capas y objetos." id="save-project">Guardar</button><span aria-hidden="true" class="toolbar-separator"></span><button class="accent" data-tooltip="Compila el terreno y actualiza validación, imágenes y vistas 3D." id="compile-preview">Compilar</button><button class="accent-strong" data-tooltip="Compila y genera el archivo schematic listo para Minecraft." id="export-schematic">Exportar .schem</button></nav><div class="view-actions"><button aria-pressed="false" class="view-toggle" data-tooltip="Muestra u oculta la configuración general del mapa." data-ui-action="project" type="button">Proyecto</button><button aria-pressed="false" class="view-toggle" data-tooltip="Muestra u oculta Capas, Herramientas, Entorno y Compilación." data-ui-action="inspector" type="button">Inspector</button><button aria-pressed="false" class="view-toggle" data-tooltip="Muestra u oculta validación, vistas compiladas y descargas." data-ui-action="results" type="button">Resultados</button></div></header><main class="workspace"><section class="editor-area">
+<body><div class="app-shell"><header class="topbar"><div class="brand-block"><button class="brand-button" data-tooltip="Abre la configuración general del proyecto." data-ui-action="project" type="button"><span class="brand-title">JKR Terrain</span><span class="brand-version">v5.5.0</span></button><span class="badge" id="dirty-badge">Sin guardar</span></div><nav aria-label="Acciones del proyecto" class="top-actions"><button data-tooltip="Crea un proyecto nuevo con la configuración inicial." id="new-project">Nuevo</button><label class="button-like" data-tooltip="Abre un proyecto .jkrterrain.json guardado anteriormente.">Abrir<input accept=".json,.jkrterrain.json,application/json" hidden="" id="load-project" type="file"/></label><button data-tooltip="Guarda el proyecto editable con todas sus capas y objetos." id="save-project">Guardar</button><span aria-hidden="true" class="toolbar-separator"></span><button class="accent" data-tooltip="Compila el terreno y actualiza validación, imágenes y vistas 3D." id="compile-preview">Compilar</button><button class="accent-strong" data-tooltip="Compila y genera el archivo schematic listo para Minecraft." id="export-schematic">Exportar .schem</button></nav><div class="view-actions"><button aria-pressed="false" class="view-toggle" data-tooltip="Muestra u oculta la configuración general del mapa." data-ui-action="project" type="button">Proyecto</button><button aria-pressed="false" class="view-toggle" data-tooltip="Muestra u oculta Capas, Herramientas, Entorno y Compilación." data-ui-action="inspector" type="button">Inspector</button><button aria-pressed="false" class="view-toggle" data-tooltip="Muestra u oculta validación, vistas compiladas y descargas." data-ui-action="results" type="button">Resultados</button></div></header><main class="workspace"><section class="editor-area">
 <div class="editor-toolbar">
 <div class="editor-history-actions">
 <button data-tooltip="Deshace la última modificación. Atajo: Ctrl+Z." id="undo" title="Deshacer (Ctrl+Z)">Deshacer</button>
@@ -21,6 +21,7 @@
 <div class="canvas-scroll" id="canvas-scroll">
 <div class="canvas-stage" id="canvas-stage">
 <canvas height="256" id="terrain-canvas" width="256"></canvas>
+<canvas aria-hidden="true" height="256" id="reference-canvas" width="256"></canvas>
 <canvas height="256" id="overlay-canvas" width="256"></canvas>
 </div>
 </div>
@@ -45,12 +46,12 @@
 </div>
 <label data-help="marker_radius">Radio del marcador<input id="marker-radius" max="512" min="1" type="number" value="12"/></label>
 <div class="marker-list" id="marker-list"></div>
-</section></div></section><div aria-label="Cambiar tamaño entre capas o marcadores y propiedades" aria-orientation="horizontal" aria-valuemax="85" aria-valuemin="15" aria-valuenow="40" class="ui-splitter inspector-splitter" id="inspector-splitter" role="separator" tabindex="0"><span aria-hidden="true" class="splitter-grip"></span></div><section class="dock-section property-dock"><div aria-label="Propiedades y compilación" class="dock-tabs" role="tablist"><button aria-controls="tool-dock-panel" aria-selected="true" class="active" data-dock-group="properties" data-dock-target="tool-dock-panel" data-tooltip="Muestra herramienta y sus parámetros." role="tab" type="button">Herramienta</button><button aria-controls="environment-dock-panel" aria-selected="false" class="" data-dock-group="properties" data-dock-target="environment-dock-panel" data-tooltip="Muestra entorno y sus parámetros." role="tab" type="button">Entorno</button><button aria-controls="compilation-dock-panel" aria-selected="false" class="" data-dock-group="properties" data-dock-target="compilation-dock-panel" data-tooltip="Muestra compilar y sus parámetros." role="tab" type="button">Compilar</button></div><div class="dock-tab-panel active" id="tool-dock-panel" role="tabpanel"><section class="panel tool-panel">
+</section></div></section><div aria-label="Cambiar tamaño entre capas o marcadores y propiedades" aria-orientation="horizontal" aria-valuemax="85" aria-valuemin="15" aria-valuenow="40" class="ui-splitter inspector-splitter" id="inspector-splitter" role="separator" tabindex="0"><span aria-hidden="true" class="splitter-grip"></span></div><section class="dock-section property-dock"><div aria-label="Propiedades y compilación" class="dock-tabs" role="tablist"><button aria-controls="tool-dock-panel" aria-selected="true" class="active" data-dock-group="properties" data-dock-target="tool-dock-panel" data-tooltip="Muestra herramienta y sus parámetros." role="tab" type="button">Herramienta</button><button aria-controls="environment-dock-panel" aria-selected="false" class="" data-dock-group="properties" data-dock-target="environment-dock-panel" data-tooltip="Muestra entorno y sus parámetros." role="tab" type="button">Entorno</button><button aria-controls="compilation-dock-panel" aria-selected="false" class="" data-dock-group="properties" data-dock-target="compilation-dock-panel" data-tooltip="Muestra compilar y sus parámetros." role="tab" type="button">Compilar</button><button aria-controls="reference-dock-panel" aria-selected="false" class="" data-dock-group="properties" data-dock-target="reference-dock-panel" data-tooltip="Muestra la imagen guía utilizada para calcar sobre el mapa." role="tab" type="button">Referencia</button></div><div class="dock-tab-panel active" id="tool-dock-panel" role="tabpanel"><section class="panel tool-panel">
 <h2 id="brush-panel-title">Herramienta de meseta</h2>
 <div class="plateau-tool-panel" id="plateau-tool-panel">
-<details class="compact-details guide-details"><summary>Guía rápida</summary><p class="plateau-intro">Pinta mesetas o crea rampas naturales que solo modifican el relieve, sin generar caminos.</p></details>
+<details class="compact-details guide-details"><summary>Guía rápida</summary><p class="plateau-intro">Pinta mesetas, selecciona las mesetas editables para cambiar sus parámetros actuales o crea rampas naturales sin camino.</p></details>
 <label class="full" data-help="plateau_tool_mode">Herramienta de altura base
-  <select id="plateau-tool-mode"><option value="plateau">Pintar meseta</option><option value="ramp">Rampa de meseta</option></select>
+  <select id="plateau-tool-mode"><option value="plateau">Pintar meseta</option><option value="select">Seleccionar meseta</option><option value="ramp">Rampa de meseta</option></select>
 </label>
 <div id="plateau-brush-fields">
 <div class="form-grid">
@@ -67,10 +68,14 @@
 </div>
 <p class="support-note">La anchura controla el radio exterior. La altura controla cuánto se levanta el césped junto a la meseta.</p>
 </div>
-<label class="full" data-help="plateau_action">Acción
+<label class="full" data-help="plateau_action" id="plateau-action-field">Acción
             <select id="plateau-action"><option value="paint">Pintar meseta</option><option value="restore">Restaurar altura media</option></select>
 </label>
 <div class="brush-profile-info" id="plateau-tool-info">Meseta de 38 bloques de diámetro · pendiente de 8 · sin soporte exterior.</div>
+<div class="plateau-selection-actions" hidden="" id="plateau-selection-actions">
+  <div class="support-note" id="plateau-selection-info">Haz clic sobre una meseta editable.</div>
+  <button class="accent full" data-tooltip="Regenera la meseta seleccionada usando la altura, radio, pendiente y soporte exterior mostrados arriba." id="plateau-apply-edit" type="button">Aplicar cambios</button>
+</div>
 </div>
 <details class="compact-details legend-details"><summary>Guía visual del pincel</summary><div class="plateau-rings-legend">
 <span><i class="ring-sample inner"></i>Círculo amarillo: superficie plana</span>
@@ -122,7 +127,7 @@
 </div>
 </div>
 <div class="water-tool-panel" hidden="" id="water-tool-panel">
-<details class="compact-details guide-details"><summary>Guía rápida</summary><p class="plateau-intro">Pinta lagos directamente o dibuja ríos libres manteniendo el clic. Los ríos se suavizan y se guardan como objetos editables.</p></details>
+<details class="compact-details guide-details"><summary>Guía rápida</summary><p class="plateau-intro">Pinta lagos directamente o dibuja ríos libres sin preocuparte por la elevación. El perfil automático resuelve el sentido, el cauce, las cascadas y las pozas.</p></details>
 <div class="form-grid">
 <label class="full" data-help="water_tool_mode">Herramienta de agua
             <select id="water-tool-mode"><option value="mass">Masa de agua</option><option value="river">Río libre</option></select>
@@ -139,6 +144,8 @@
 </div>
 <div hidden="" id="water-course-fields">
 <div class="form-grid compact-grid">
+<label class="full" data-help="water_river_style">Estilo del río<select id="water-river-style"><option value="calm">Tranquilo</option><option selected="" value="natural">Natural</option><option value="mountain">Montañoso</option></select></label>
+<label class="full" data-help="water_cascade_incline">Inclinación de cascada<select id="water-cascade-incline"><option selected="" value="0">Vertical (comportamiento actual)</option><option value="8">Leve 1:8</option><option value="6">Suave 1:6</option><option value="4">Natural 1:4</option><option value="2">Profunda 1:2</option></select></label>
 <label data-help="water_course_smoothing">Suavizado del trazo<input id="water-course-smoothing" max="100" min="0" step="1" type="number" value="60"/><span class="unit-suffix">%</span></label>
 <label class="toggle-row" data-help="water_course_exit"><input id="water-course-exit" type="checkbox"/> Final como salida entre montañas</label>
 </div>
@@ -262,6 +269,34 @@
 <div class="preset-actions"><select id="compilation-preset-select"><option value="">Selecciona un preset</option></select><button id="compilation-preset-save" type="button">Guardar</button><button id="compilation-preset-load" type="button">Cargar</button><button class="danger-soft" id="compilation-preset-delete" type="button">Borrar</button></div>
 </div></details>
 <div class="budget" id="voxel-budget"></div>
+</section></div><div class="dock-tab-panel" hidden="" id="reference-dock-panel" role="tabpanel"><section class="panel reference-panel">
+<div class="panel-title"><h2>Imagen de referencia</h2><span class="badge neutral" id="reference-status-badge">Sin imagen</span></div>
+<p class="reference-intro">Carga un plano o bosquejo para calcarlo. Esta imagen solo aparece en el editor y nunca modifica el terreno ni el schematic.</p>
+<div class="reference-upload-row">
+<label class="button-like accent" data-tooltip="Carga una imagen PNG, JPG o WebP como guía visual del lienzo.">Cargar imagen<input accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp" hidden="" id="reference-image-file" type="file"/></label>
+<button class="danger-soft" data-tooltip="Quita la imagen guía del proyecto sin modificar ninguna capa del terreno." disabled="" id="reference-remove" type="button">Quitar</button>
+</div>
+<div class="reference-controls" id="reference-controls">
+<div class="form-grid compact-grid">
+<label class="toggle-row" data-help="reference_visible"><input checked="" disabled="" id="reference-visible" type="checkbox"/> Mostrar imagen</label>
+<label class="toggle-row" data-help="reference_locked"><input disabled="" id="reference-locked" type="checkbox"/> Bloquear posición</label>
+<label class="full toggle-row reference-edit-toggle" data-help="reference_edit_mode"><input disabled="" id="reference-edit-mode" type="checkbox"/> Mover directamente sobre el lienzo</label>
+<label class="full" data-help="reference_opacity">Opacidad
+<span class="reference-range-row"><input disabled="" id="reference-opacity" max="100" min="0" step="1" type="range" value="40"/><output id="reference-opacity-value">40%</output></span>
+</label>
+<label data-help="reference_scale">Escala %<input disabled="" id="reference-scale" max="500" min="10" step="1" type="number" value="100"/></label>
+<label data-help="reference_rotation">Rotación °<input disabled="" id="reference-rotation" max="180" min="-180" step="1" type="number" value="0"/></label>
+<label data-help="reference_position_x">Posición X<input disabled="" id="reference-position-x" max="4096" min="-2048" step="0.5" type="number" value="128"/></label>
+<label data-help="reference_position_z">Posición Z<input disabled="" id="reference-position-z" max="4096" min="-2048" step="0.5" type="number" value="128"/></label>
+</div>
+<div class="button-row reference-actions">
+<button data-tooltip="Escala proporcionalmente la imagen para que entre completa dentro del mapa." disabled="" id="reference-fit" type="button">Ajustar al lienzo</button>
+<button data-tooltip="Coloca el centro de la imagen en el centro exacto del mapa." disabled="" id="reference-center" type="button">Centrar</button>
+<button data-tooltip="Restaura posición, escala, rotación y opacidad de la referencia." disabled="" id="reference-reset" type="button">Restablecer</button>
+</div>
+<div class="brush-profile-info reference-info" id="reference-info">Carga una imagen para utilizarla como guía.</div>
+<details class="compact-details guide-details"><summary>Cómo editarla</summary><p class="plateau-intro">Activa «Mover directamente sobre el lienzo» y arrastra la imagen. Usa Escala, Rotación y Posición para ajustes precisos. Bloquéala antes de volver a pintar.</p></details>
+</div>
 </section></div></section></aside></main><aside aria-label="Configuración del proyecto" class="drawer project-drawer" hidden="" id="project-drawer"><header class="drawer-header"><div><h2>Proyecto</h2><p>Dimensiones, alturas globales y flujo de trabajo.</p></div><button aria-label="Cerrar configuración del proyecto" class="icon-button" data-close-drawer="project" data-tooltip="Cierra el panel del proyecto." type="button">×</button></header><div class="drawer-scroll"><section class="panel project-panel">
 <div class="panel-title"><h2>Configuración del proyecto</h2></div>
 <div class="form-grid">

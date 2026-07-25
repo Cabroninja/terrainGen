@@ -1,0 +1,17 @@
+JKR Terrain Generator v5.5.0 — Mesetas editables
+
+Este ZIP no tiene carpeta contenedora adicional.
+Descomprímelo desde la raíz del proyecto:
+
+  unzip -o JKR-Terrain-Generator-v5.5.0-MESETAS-EDITABLES-PARCHE.zip
+  docker compose up -d --build
+
+Después recarga la aplicación con Ctrl + F5.
+
+Archivos reemplazados:
+- app/static/app.js
+- app/static/plateau-tool.js
+- app/static/index.html
+- app/static/styles.css
+- app/static/config-help.json
+- tests/test_plateau_tool.py

@@ -110,6 +110,14 @@ class WaterCourse(BaseModel):
     shore_width: int = Field(default=6, ge=0, le=128)
     shore_profile: Literal["compact", "natural", "smooth"] = "natural"
     road_policy: Literal["protect", "ford", "cut"] = "protect"
+    river_style: Literal["calm", "natural", "mountain"] = "natural"
+    cascade_incline_ratio: float = Field(default=0.0, ge=0.0, le=12.0)
+    # Campos heredados de las versiones 5.1–5.2.5. Se conservan únicamente
+    # para abrir proyectos antiguos; el generador automático ya no los usa.
+    relief_mode: Literal["downhill", "follow"] = "downhill"
+    cascade_containment: bool = False
+    cascade_threshold: int = Field(default=2, ge=2, le=16)
+    downhill_slope_ratio: float = Field(default=4.0, ge=1.0, le=12.0)
     smoothing: int = Field(default=60, ge=0, le=100)
     exit_enabled: bool = False
 
@@ -153,6 +161,20 @@ class StructurePlacement(BaseModel):
     sink: int = Field(default=0, ge=0, le=32)
 
 
+class ReferenceImage(BaseModel):
+    name: str = Field(default="referencia", max_length=160)
+    data_url: str = Field(min_length=32, max_length=30_000_000, pattern=r"^data:image/(png|jpeg|webp);base64,")
+    x: float = Field(default=0.0, ge=-8192.0, le=8192.0)
+    z: float = Field(default=0.0, ge=-8192.0, le=8192.0)
+    fit_width: float = Field(default=1.0, gt=0.0, le=8192.0)
+    fit_height: float = Field(default=1.0, gt=0.0, le=8192.0)
+    scale: float = Field(default=1.0, ge=0.1, le=5.0)
+    rotation: float = Field(default=0.0, ge=-180.0, le=180.0)
+    opacity: float = Field(default=0.4, ge=0.0, le=1.0)
+    visible: bool = True
+    locked: bool = False
+
+
 class ProjectDocument(BaseModel):
     format: Literal["jkr-terrain-project"] = "jkr-terrain-project"
     version: Literal[2] = 2
@@ -164,6 +186,7 @@ class ProjectDocument(BaseModel):
     structure_assets: list[StructureAsset] = Field(default_factory=list, max_length=2048)
     structure_collections: list[StructureCollection] = Field(default_factory=list, max_length=512)
     structure_placements: list[StructurePlacement] = Field(default_factory=list, max_length=100_000)
+    reference_image: ReferenceImage | None = None
 
     @model_validator(mode="after")
     def validate_project(self) -> "ProjectDocument":
