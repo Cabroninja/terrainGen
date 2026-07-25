@@ -21,6 +21,7 @@ class CompiledTerrain:
     road_mask: np.ndarray
     water_mask: np.ndarray
     water_surface: np.ndarray
+    water_fall_mask: np.ndarray
     water_exit_mask: np.ndarray
     playable_mask: np.ndarray
     reserved_mask: np.ndarray
@@ -167,6 +168,8 @@ def _validation(
             "course_count": len(water_summaries),
             "exit_count": sum(1 for item in water_summaries if item["exit_enabled"]),
             "exit_cells": int((water_exit_mask > 0).sum()),
+            "cascade_count": sum(int(item.get("cascades_detected", 0)) for item in water_summaries),
+            "contained_cascades": sum(int(item.get("cascades_contained", 0)) for item in water_summaries),
             "items": water_summaries,
         },
         "structures": {
@@ -289,6 +292,7 @@ def compile_project(project: ProjectDocument) -> CompiledTerrain:
         road_mask=roads,
         water_mask=water.astype(np.uint8),
         water_surface=water_result.water_surface.astype(np.int16),
+        water_fall_mask=water_result.fall_mask.astype(np.uint8),
         water_exit_mask=water_result.exit_mask.astype(np.uint8),
         playable_mask=export_playable.astype(np.uint8),
         reserved_mask=reserved.astype(np.uint8),

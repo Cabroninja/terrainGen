@@ -9,6 +9,7 @@ export function normalizeWaterSettings(input = {}) {
     shoreWidth: Math.round(clamp(input.shoreWidth, 0, 128)),
     shoreProfile: ['compact', 'natural', 'smooth'].includes(input.shoreProfile) ? input.shoreProfile : 'natural',
     roadPolicy: ['protect', 'ford', 'cut'].includes(input.roadPolicy) ? input.roadPolicy : 'protect',
+    riverStyle: ['calm', 'natural', 'mountain'].includes(input.riverStyle) ? input.riverStyle : 'natural',
     smoothing: Math.round(clamp(input.smoothing, 0, 100)),
     exitEnabled: Boolean(input.exitEnabled),
   };

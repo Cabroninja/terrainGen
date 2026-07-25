@@ -953,7 +953,7 @@
     "label": "Herramienta de agua",
     "category": "Agua",
     "technical": "Alterna entre una máscara pintada de nivel global para lagos y un curso libre almacenado como objeto con nivel por celda.",
-    "plain": "Masa sirve para lagos pintados; Río libre permite dibujar un cauce manteniendo el clic.",
+    "plain": "Elige entre pintar una masa de agua o dibujar un río libre. En Río libre solo defines el recorrido horizontal; el perfil vertical se genera automáticamente al compilar.",
     "low": "Masa de agua: superficie horizontal compartida.",
     "high": "Río libre: sigue el relieve desde la cota alta hacia la baja.",
     "minimum": "Masa de agua.",
@@ -1212,5 +1212,54 @@
     "minimum": "Oculta",
     "maximum": "Visible",
     "rule": "Las estructuras se convierten en bloques al compilar la Vista Minecraft y el .schem."
+  },
+  "water_relief_mode": {
+    "label": "Adaptación al relieve",
+    "category": "Ríos libres",
+    "technical": "Controla cómo se calcula la cota superficial del río a lo largo del recorrido dibujado. 'Seguir terreno' usa la altura local muestreada en cada tramo y evita excavar mesetas intermedias como si el río fuera un bulldozer. 'Flujo descendente' obliga a que la superficie del agua nunca suba en la dirección del curso.",
+    "plain": "Úsalo para decidir si el río debe acompañar subidas y bajadas del relieve, o si debe bajar siempre aunque tenga que cortar terreno intermedio.",
+    "low": "Seguir terreno: el cauce mantiene una profundidad parecida respecto al suelo local y se adapta mejor a mesetas, terrazas y rampas.",
+    "high": "Flujo descendente: conserva un descenso continuo. Si activas el soporte de terreno, los descensos fuertes se resuelven como una rampa contenida que excava arriba y rellena abajo.",
+    "rule": "Usa Seguir terreno para acompañar literalmente el relieve. Usa Flujo descendente con soporte para atravesar mesetas manteniendo un cauce contenido."
+  },
+  "water_cascade_containment": {
+    "label": "Soporte de terreno en descensos",
+    "category": "Ríos · Flujo descendente",
+    "technical": "En el modo Flujo descendente, crea un perfil similar al de una rampa cuando el río baja desde una meseta: excava donde sobra terreno y agrega bloques donde falta una base bajo el cauce. También levanta costados locales para contener el agua.",
+    "plain": "Actívalo en Flujo descendente para que el río no quede suspendido ni forme una lámina triangular al salir de una meseta. La aplicación completa el terreno faltante debajo del río.",
+    "low": "Desactivado: Flujo descendente solo excava y puede dejar una columna o lámina de agua demasiado profunda sobre terreno bajo.",
+    "high": "Activado: los descensos fuertes reciben fondo y costados de soporte, como una rampa hidráulica.",
+    "rule": "Solo afecta descensos fuertes del modo Flujo descendente. Seguir terreno no recibe esta modificación."
+  },
+  "water_cascade_threshold": {
+    "label": "Detectar cascada desde",
+    "category": "Ríos · Flujo descendente",
+    "technical": "Diferencia vertical mínima acumulada del perfil descendente para construir un tramo con fondo y costados de soporte.",
+    "plain": "Define cuántos bloques debe bajar el río antes de que Flujo descendente construya una base parecida a una rampa.",
+    "minimum": "2 bloques",
+    "maximum": "16 bloques",
+    "low": "Detecta más escalones como cascadas.",
+    "high": "Solo protege caídas grandes.",
+    "rule": "Solo se utiliza cuando Flujo descendente tiene activado el soporte de terreno."
+  },
+  "water_downhill_slope_ratio": {
+    "label": "Pendiente máxima del descenso 1:X",
+    "category": "Ríos · Flujo descendente",
+    "technical": "Define la longitud horizontal mínima que debe utilizar el cauce para bajar cada bloque de altura en un descenso con soporte. Por ejemplo, 1:4 intenta usar cuatro bloques horizontales por cada bloque vertical.",
+    "plain": "Un número mayor hace que el río baje de forma más larga y suave. Un número menor crea una bajada más corta y empinada.",
+    "minimum": "1:1",
+    "maximum": "1:12",
+    "low": "Descenso corto y pronunciado; puede cortar visualmente una meseta alta.",
+    "high": "Descenso largo y suave; necesita más recorrido dibujado antes y después de la meseta.",
+    "rule": "Si el recorrido no tiene longitud suficiente, la aplicación usa la pendiente más suave posible y muestra una advertencia en Validación."
+  },
+  "water_river_style": {
+    "label": "Estilo del río",
+    "category": "Río automático",
+    "technical": "Selecciona un preset del generador vertical automático. El compilador analiza el relieve de todo el recorrido, determina el sentido del agua y combina cauces suaves, excavación, relleno, cascadas contenidas y pozas receptoras.",
+    "plain": "Tú dibujas el río en el mapa y esta opción indica qué carácter debe tener. No necesitas configurar pendientes ni decidir dónde colocar cascadas.",
+    "low": "Tranquilo: cauces más suaves, pozas amplias y cascadas menos frecuentes.",
+    "high": "Montañoso: acepta más cascadas, gargantas compactas y cambios verticales más marcados.",
+    "rule": "Natural es el valor recomendado para la mayoría de los mapas tipo Albion."
   }
 }

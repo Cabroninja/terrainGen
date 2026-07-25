@@ -53,6 +53,7 @@ def write_terrain_3d_data(
         "roads": terrain.road_mask[selection].astype(np.uint8).ravel().tolist(),
         "water": terrain.water_mask[selection].astype(np.uint8).ravel().tolist(),
         "water_surface": terrain.water_surface[selection].astype(np.int16).ravel().tolist(),
+        "water_fall": terrain.water_fall_mask[selection].astype(np.uint8).ravel().tolist(),
         "reserved": terrain.reserved_mask[selection].astype(np.uint8).ravel().tolist(),
         "playable": terrain.playable_mask[selection].astype(np.uint8).ravel().tolist(),
         "mountain": np.clip(terrain.mountain_mask[selection] * 255.0, 0, 255).astype(np.uint8).ravel().tolist(),

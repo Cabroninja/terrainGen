@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import numpy as np
-from scipy.ndimage import distance_transform_edt
+from scipy.ndimage import binary_dilation, distance_transform_edt
 
 from app.core.models import ProjectConfig, WaterCourse
 
@@ -13,12 +13,61 @@ class WaterSystemResult:
     height: np.ndarray
     water_mask: np.ndarray
     water_surface: np.ndarray
+    fall_mask: np.ndarray
     exit_mask: np.ndarray
     shore_mask: np.ndarray
     ford_mask: np.ndarray
     road_cut_mask: np.ndarray
     issues: list[dict]
     summaries: list[dict]
+
+
+@dataclass(slots=True)
+class WaterfallEvent:
+    progress: float
+    high_surface: float
+    low_surface: float
+
+
+@dataclass(slots=True)
+class RiverPlan:
+    points: np.ndarray
+    cumulative: np.ndarray
+    sampled_terrain: np.ndarray
+    surface_profile: np.ndarray
+    waterfalls: list[WaterfallEvent]
+    user_total_length: float
+    reversed_flow: bool
+    issues: list[dict]
+    modification_cost: float
+
+
+STYLE_SETTINGS = {
+    "calm": {
+        "label": "Tranquilo",
+        "gentle_ratio": 22.0,
+        "waterfall_threshold": 7.0,
+        "pool_length": 1.55,
+        "pool_width": 1.45,
+        "max_fill": 4.0,
+    },
+    "natural": {
+        "label": "Natural",
+        "gentle_ratio": 14.0,
+        "waterfall_threshold": 4.0,
+        "pool_length": 1.30,
+        "pool_width": 1.25,
+        "max_fill": 5.0,
+    },
+    "mountain": {
+        "label": "Montañoso",
+        "gentle_ratio": 8.0,
+        "waterfall_threshold": 3.0,
+        "pool_length": 1.05,
+        "pool_width": 1.10,
+        "max_fill": 6.0,
+    },
+}
 
 
 def _smoothstep(value: np.ndarray) -> np.ndarray:
@@ -92,34 +141,20 @@ def _nearest_boundary_point(point: np.ndarray, direction: np.ndarray, width: int
     return min(edge_candidates, key=lambda candidate: float(np.sum((candidate - point) ** 2)))
 
 
-def _prepare_course_points(
-    course: WaterCourse,
-    profile_height: np.ndarray,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, float, bool, list[dict]]:
+def _clean_points(course: WaterCourse, profile_height: np.ndarray) -> tuple[np.ndarray, float, list[dict]]:
     issues: list[dict] = []
     points = np.asarray([(point.x, point.z) for point in course.points], dtype=np.float32)
     if points.shape[0] < 2:
-        return points, np.zeros(0, dtype=np.float32), np.zeros(0, dtype=np.float32), 0.0, False, issues
+        return points, 0.0, issues
 
     vectors = points[1:] - points[:-1]
     segment_lengths = np.sqrt(np.sum(vectors * vectors, axis=1))
     useful = np.concatenate(([True], segment_lengths > 0.25))
     points = points[useful]
     if points.shape[0] < 2:
-        return points, np.zeros(0, dtype=np.float32), np.zeros(0, dtype=np.float32), 0.0, False, issues
+        return points, 0.0, issues
 
-    sampled = np.asarray([_sample_height(profile_height, x, z) for x, z in points], dtype=np.float32)
-    reversed_flow = False
-    if not course.exit_enabled and sampled[0] < sampled[-1]:
-        points = points[::-1].copy()
-        sampled = sampled[::-1].copy()
-        reversed_flow = True
-
-    user_points_count = points.shape[0]
-    user_vectors = points[1:] - points[:-1]
-    user_lengths = np.sqrt(np.sum(user_vectors * user_vectors, axis=1))
-    user_total_length = float(user_lengths.sum())
-
+    user_total_length = float(np.sqrt(np.sum((points[1:] - points[:-1]) ** 2, axis=1)).sum())
     if course.exit_enabled:
         direction = points[-1] - points[-2]
         if float(np.linalg.norm(direction)) <= 1e-6:
@@ -127,27 +162,172 @@ def _prepare_course_points(
         boundary = _nearest_boundary_point(points[-1], direction, profile_height.shape[1], profile_height.shape[0])
         if float(np.linalg.norm(boundary - points[-1])) > 0.5:
             points = np.vstack([points, boundary])
-            sampled = np.append(sampled, sampled[-1])
-        if sampled[0] + 0.5 < sampled[min(user_points_count - 1, sampled.size - 1)]:
-            issues.append({
-                "severity": "warning",
-                "code": "water_exit_uphill",
-                "message": f"El río «{course.label or course.id}» llega a su salida desde una cota más baja; el cauce se excavará para conservar flujo descendente.",
-            })
+    return points, user_total_length, issues
 
-    vectors = points[1:] - points[:-1]
-    segment_lengths = np.sqrt(np.sum(vectors * vectors, axis=1))
-    cumulative = np.concatenate(([0.0], np.cumsum(segment_lengths))).astype(np.float32)
+
+def _densify_points(points: np.ndarray, spacing: float = 1.0, maximum_points: int = 8192) -> tuple[np.ndarray, np.ndarray]:
+    if points.shape[0] < 2:
+        return points.astype(np.float32, copy=True), np.zeros(points.shape[0], dtype=np.float32)
+    output = [points[0].astype(np.float32)]
+    for start, end in zip(points[:-1], points[1:], strict=True):
+        delta = end - start
+        length = float(np.linalg.norm(delta))
+        if length <= 1e-6:
+            continue
+        steps = max(1, int(np.ceil(length / max(0.25, spacing))))
+        for step in range(1, steps + 1):
+            output.append((start + delta * (step / steps)).astype(np.float32))
+            if len(output) >= maximum_points:
+                break
+        if len(output) >= maximum_points:
+            break
+    dense = np.asarray(output, dtype=np.float32)
+    lengths = np.sqrt(np.sum((dense[1:] - dense[:-1]) ** 2, axis=1)) if dense.shape[0] > 1 else np.zeros(0)
+    cumulative = np.concatenate(([0.0], np.cumsum(lengths))).astype(np.float32)
+    return dense, cumulative
+
+
+def _point_tangents(points: np.ndarray) -> np.ndarray:
+    tangents = np.zeros_like(points, dtype=np.float32)
+    if points.shape[0] < 2:
+        tangents[:, 0] = 1.0
+        return tangents
+    tangents[0] = points[1] - points[0]
+    tangents[-1] = points[-1] - points[-2]
+    if points.shape[0] > 2:
+        tangents[1:-1] = points[2:] - points[:-2]
+    norms = np.linalg.norm(tangents, axis=1)
+    safe = norms > 1e-6
+    tangents[safe] /= norms[safe, None]
+    tangents[~safe, 0] = 1.0
+    return tangents
+
+
+def _sample_corridor_height(height: np.ndarray, points: np.ndarray, width: int) -> np.ndarray:
+    tangents = _point_tangents(points)
+    half_width = max(1.0, float(width) / 2.0)
+    offsets = np.asarray([-0.75, -0.35, 0.0, 0.35, 0.75], dtype=np.float32) * half_width
+    samples = np.empty((points.shape[0], offsets.size), dtype=np.float32)
+    for index, (point, tangent) in enumerate(zip(points, tangents, strict=True)):
+        normal = np.asarray([-tangent[1], tangent[0]], dtype=np.float32)
+        for offset_index, offset in enumerate(offsets):
+            sample = point + normal * float(offset)
+            samples[index, offset_index] = _sample_height(height, float(sample[0]), float(sample[1]))
+    return np.median(samples, axis=1).astype(np.float32)
+
+
+def _isotonic_nonincreasing(values: np.ndarray) -> np.ndarray:
+    """Least-squares non-increasing fit using the pool-adjacent-violators algorithm."""
+    if values.size <= 1:
+        return values.astype(np.float32, copy=True)
+    blocks: list[list[float | int]] = []
+    for index, raw in enumerate(values.astype(np.float64)):
+        blocks.append([float(raw), 1.0, index, index])  # sum, weight, start, end
+        while len(blocks) >= 2:
+            previous = blocks[-2][0] / blocks[-2][1]
+            current = blocks[-1][0] / blocks[-1][1]
+            if previous + 1e-9 >= current:
+                break
+            right = blocks.pop()
+            left = blocks.pop()
+            blocks.append([
+                float(left[0]) + float(right[0]),
+                float(left[1]) + float(right[1]),
+                int(left[2]),
+                int(right[3]),
+            ])
+    result = np.empty(values.size, dtype=np.float32)
+    for total, weight, start, end in blocks:
+        result[int(start): int(end) + 1] = float(total) / float(weight)
+    return result
+
+
+def _style(course: WaterCourse) -> dict[str, float | str]:
+    return STYLE_SETTINGS.get(course.river_style, STYLE_SETTINGS["natural"])
+
+
+def _automatic_surface_profile(
+    sampled: np.ndarray,
+    cumulative: np.ndarray,
+    course: WaterCourse,
+) -> tuple[np.ndarray, list[WaterfallEvent], float]:
+    settings = _style(course)
     smoothed = _moving_average(sampled, course.smoothing)
 
-    # El agua se interpreta desde el extremo alto hacia el bajo. El perfil nunca
-    # sube en la dirección del flujo, pero sí puede seguir rampas y mesetas cuando
-    # el usuario dibuja desde la cota alta (o el editor invierte el trazo).
-    surface_profile = np.minimum.accumulate(smoothed).astype(np.float32)
-    if course.exit_enabled and surface_profile.size > user_points_count:
-        surface_profile[user_points_count:] = surface_profile[user_points_count - 1]
+    # A slight downward bias favours carving a natural bed over building tall
+    # embankments. The fill cap is then enforced and the monotonic fit repeated.
+    target = smoothed - 0.75
+    fitted = _isotonic_nonincreasing(target)
+    maximum_fill = float(settings["max_fill"])
+    for _ in range(3):
+        fitted = np.minimum(fitted, smoothed + maximum_fill)
+        fitted = _isotonic_nonincreasing(fitted)
 
-    return points, cumulative, surface_profile, user_total_length, reversed_flow, issues
+    ratio = float(settings["gentle_ratio"])
+    waterfall_threshold = float(settings["waterfall_threshold"])
+    surface = np.empty_like(fitted, dtype=np.float32)
+    surface[0] = fitted[0]
+    waterfalls: list[WaterfallEvent] = []
+
+    for index in range(1, fitted.size):
+        distance = max(1e-4, float(cumulative[index] - cumulative[index - 1]))
+        gentle_floor = float(surface[index - 1]) - distance / ratio
+        candidate = max(float(fitted[index]), gentle_floor)
+        unresolved_drop = candidate - float(fitted[index])
+        direct_drop = float(surface[index - 1]) - float(fitted[index])
+
+        # Small changes become a long, gentle bed. Once the unresolved vertical
+        # difference is large enough, it becomes a true waterfall instead of a
+        # steep diagonal river that cuts a plateau in half.
+        if unresolved_drop >= waterfall_threshold and direct_drop >= waterfall_threshold:
+            high = float(surface[index - 1])
+            low = float(fitted[index])
+            waterfalls.append(WaterfallEvent(float(cumulative[index]), high, low))
+            surface[index] = low
+        else:
+            surface[index] = candidate
+
+    # Cost is used only to choose the most natural direction when the user draws
+    # without caring which endpoint is upstream.
+    floor = surface - float(course.depth)
+    cut = np.maximum(sampled - floor, 0.0)
+    fill = np.maximum(floor - sampled, 0.0)
+    cost = float(np.mean(cut * cut + fill * fill * 2.25) + len(waterfalls) * 8.0)
+    return surface, waterfalls, cost
+
+
+def _build_plan(course: WaterCourse, profile_height: np.ndarray) -> RiverPlan:
+    raw_points, user_total_length, issues = _clean_points(course, profile_height)
+    if raw_points.shape[0] < 2:
+        return RiverPlan(raw_points, np.zeros(0, dtype=np.float32), np.zeros(0, dtype=np.float32), np.zeros(0, dtype=np.float32), [], user_total_length, False, issues, float("inf"))
+
+    def candidate(points: np.ndarray, reversed_flow: bool) -> RiverPlan:
+        dense, cumulative = _densify_points(points)
+        sampled = _sample_corridor_height(profile_height, dense, course.width)
+        surface, waterfalls, cost = _automatic_surface_profile(sampled, cumulative, course)
+        return RiverPlan(dense, cumulative, sampled, surface, waterfalls, user_total_length, reversed_flow, list(issues), cost)
+
+    forward = candidate(raw_points, False)
+    if course.exit_enabled:
+        if forward.sampled_terrain.size >= 2 and forward.sampled_terrain[0] + 0.5 < forward.sampled_terrain[-1]:
+            forward.issues.append({
+                "severity": "warning",
+                "code": "water_exit_uphill",
+                "message": f"El río «{course.label or course.id}» llega a su salida desde una cota más baja; el perfil automático excavará el recorrido para mantener el flujo.",
+            })
+        return forward
+
+    reverse = candidate(raw_points[::-1].copy(), True)
+    # Prefer the lower modification cost. A tiny endpoint-height tie-break keeps
+    # the higher endpoint upstream when both alternatives are practically equal.
+    if reverse.modification_cost + 0.25 < forward.modification_cost:
+        return reverse
+    if abs(reverse.modification_cost - forward.modification_cost) <= 0.25:
+        forward_drop = float(forward.sampled_terrain[0] - forward.sampled_terrain[-1])
+        reverse_drop = float(reverse.sampled_terrain[0] - reverse.sampled_terrain[-1])
+        if reverse_drop > forward_drop:
+            return reverse
+    return forward
 
 
 def _polyline_fields(points: np.ndarray, cumulative: np.ndarray, x: np.ndarray, z: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -168,6 +348,186 @@ def _polyline_fields(points: np.ndarray, cumulative: np.ndarray, x: np.ndarray, 
         segment_length = float(cumulative[index + 1] - cumulative[index])
         best_progress = np.where(closer, cumulative[index] + t * segment_length, best_progress)
     return np.sqrt(best_distance_sq), best_progress
+
+
+def _point_and_direction_at_progress(points: np.ndarray, cumulative: np.ndarray, target_progress: float) -> tuple[np.ndarray, np.ndarray]:
+    target = float(np.clip(target_progress, float(cumulative[0]), float(cumulative[-1])))
+    index = int(np.searchsorted(cumulative, target, side="right") - 1)
+    index = max(0, min(index, points.shape[0] - 2))
+    start = points[index]
+    end = points[index + 1]
+    segment_length = max(1e-6, float(cumulative[index + 1] - cumulative[index]))
+    t = float(np.clip((target - float(cumulative[index])) / segment_length, 0.0, 1.0))
+    point = start + (end - start) * t
+    direction = end - start
+    norm = float(np.linalg.norm(direction))
+    direction = direction / norm if norm > 1e-6 else np.asarray([1.0, 0.0], dtype=np.float32)
+    return point.astype(np.float32), direction.astype(np.float32)
+
+
+def _apply_automatic_waterfalls(
+    *,
+    course: WaterCourse,
+    plan: RiverPlan,
+    progress: np.ndarray,
+    distance: np.ndarray,
+    gx: np.ndarray,
+    gz: np.ndarray,
+    x0: int,
+    z0: int,
+    half_width: float,
+    terrain_slice: np.ndarray,
+    road_slice: np.ndarray,
+    local_mask: np.ndarray,
+    local_surface: np.ndarray,
+    local_fall: np.ndarray,
+    local_shore: np.ndarray,
+    local_cut: np.ndarray,
+    issues: list[dict],
+    map_width: int,
+    map_length: int,
+) -> dict:
+    settings = _style(course)
+    contained = 0
+    curtain_cells = 0
+    pool_cells = 0
+    support_cells = 0
+    heights: list[float] = []
+
+    for number, event in enumerate(plan.waterfalls, start=1):
+        drop = max(0.0, event.high_surface - event.low_surface)
+        if drop < 1.5:
+            continue
+        point, direction = _point_and_direction_at_progress(plan.points, plan.cumulative, event.progress)
+        curtain_half_length = max(0.55, min(1.25, float(course.width) * 0.10))
+        curtain = (
+            (np.abs(progress - event.progress) <= curtain_half_length)
+            & (distance <= half_width + 1e-6)
+        )
+        blocked = curtain & road_slice & (course.road_policy != "cut")
+        active = curtain & ~blocked
+        if not np.any(active):
+            issues.append({
+                "severity": "warning",
+                "code": "waterfall_blocked",
+                "message": f"La cascada {number} de «{course.label or course.id}» quedó bloqueada por un camino protegido.",
+            })
+            continue
+
+        # One narrow column stores the complete vertical drop. The exporter emits
+        # a source block only at the top and falling water below it.
+        terrain_slice[active] = event.low_surface - float(course.depth)
+        local_mask[active] = 1
+        local_surface[active] = int(round(event.high_surface))
+        local_fall[active] = 1
+        if course.road_policy == "cut":
+            local_cut[active & road_slice] = 1
+
+        # Shape a broken alcove instead of a cylindrical shell. A small amount
+        # of targeted support still contains the water, but the surrounding
+        # terrain is blended into an irregular rocky recess so the waterfall
+        # does not look like the exposed side of a tube.
+        dx = gx - float(point[0])
+        dz = gz - float(point[1])
+        longitudinal = dx * float(direction[0]) + dz * float(direction[1])
+        lateral_signed = -dx * float(direction[1]) + dz * float(direction[0])
+        lateral_abs = np.abs(lateral_signed)
+
+        alcove_up = max(1.8, min(5.5, half_width + 1.2))
+        alcove_down = max(2.4, min(7.5, half_width + drop * 0.10 + 2.0))
+        alcove_width = max(half_width + 2.4, half_width + float(course.shore_width) * 0.7 + min(4.0, drop * 0.10 + 1.4))
+        long_norm = np.where(longitudinal < 0.0, longitudinal / alcove_up, longitudinal / alcove_down)
+        side_norm = lateral_signed / alcove_width
+        alcove = (long_norm ** 2 + side_norm ** 2 <= 1.0) & ~active & ~road_slice
+        depth_bias = np.clip((longitudinal + alcove_up) / (alcove_up + alcove_down), 0.0, 1.0)
+        side_bias = np.clip(1.0 - lateral_abs / alcove_width, 0.0, 1.0)
+        alcove_ratio = np.clip(0.18 + 0.72 * depth_bias * (0.60 + 0.40 * side_bias), 0.0, 1.0)
+        alcove_target = event.low_surface + drop * alcove_ratio
+        carve = alcove & (terrain_slice > alcove_target)
+        terrain_slice[carve] = alcove_target[carve]
+        local_shore[carve] = 1
+
+        support_front = max(1.8, half_width * 0.35 + 1.0)
+        support_outer = half_width + 1.5
+        support = (
+            (lateral_abs > half_width)
+            & (lateral_abs <= support_outer)
+            & (longitudinal >= -0.8)
+            & (longitudinal <= support_front)
+            & ~road_slice
+        )
+        lateral_ratio = np.clip((support_outer - lateral_abs) / max(1e-6, support_outer - half_width), 0.0, 1.0)
+        front_ratio = np.clip(1.0 - np.maximum(longitudinal, 0.0) / max(1e-6, support_front), 0.0, 1.0)
+        support_ratio = np.clip(0.30 + 0.45 * lateral_ratio * front_ratio, 0.0, 0.82)
+        support_target = event.low_surface + drop * support_ratio
+        support_fill = support & (terrain_slice < support_target)
+        terrain_slice[support_fill] = support_target[support_fill]
+        local_shore[support_fill] = 1
+        support_cells += int(support_fill.sum())
+
+        # A rounded receiving pool starts below the curtain and reconnects with
+        # the ordinary lower river. It replaces the triangular sheet seen when a
+        # large height difference was interpolated as a diagonal surface.
+        pool_length = max(3.0, min(12.0, (half_width + drop * 0.18 + 2.0) * float(settings["pool_length"])))
+        pool_width = max(half_width + 1.0, (half_width + min(4.0, drop * 0.12 + 1.0)) * float(settings["pool_width"]))
+        center = point + direction * min(3.0, max(1.0, half_width * 0.35))
+        dx = gx - float(center[0])
+        dz = gz - float(center[1])
+        longitudinal = dx * float(direction[0]) + dz * float(direction[1])
+        lateral_pool = -dx * float(direction[1]) + dz * float(direction[0])
+        pool = (longitudinal / pool_length) ** 2 + (lateral_pool / pool_width) ** 2 <= 1.0
+        pool &= longitudinal >= -pool_length * 0.65
+        pool &= longitudinal <= pool_length
+        pool &= ~active
+        if course.road_policy != "cut":
+            pool &= ~road_slice
+        new_pool = pool & (local_mask == 0)
+        terrain_slice[pool] = event.low_surface - float(course.depth) - 1.0
+        local_mask[pool] = 1
+        local_surface[pool] = int(round(event.low_surface))
+        local_fall[pool] = 0
+        if course.road_policy == "cut":
+            local_cut[pool & road_slice] = 1
+
+        ring = binary_dilation(pool, iterations=1) & ~pool & (local_mask == 0) & ~road_slice
+        ring_fill = ring & (terrain_slice < event.low_surface)
+        terrain_slice[ring_fill] = event.low_surface
+        local_shore[ring_fill] = 1
+        support_cells += int(ring_fill.sum())
+
+        global_z, global_x = np.where(active)
+        touches_border = bool(np.any(
+            (global_x + x0 == 0)
+            | (global_x + x0 == map_width - 1)
+            | (global_z + z0 == 0)
+            | (global_z + z0 == map_length - 1)
+        ))
+        if touches_border and not course.exit_enabled:
+            issues.append({
+                "severity": "warning",
+                "code": "waterfall_border",
+                "message": f"La cascada {number} de «{course.label or course.id}» toca el borde del mapa sin ser una salida autorizada.",
+            })
+        if np.any(blocked):
+            issues.append({
+                "severity": "warning",
+                "code": "waterfall_road_gap",
+                "message": f"La cascada {number} de «{course.label or course.id}» cruza un camino protegido; revisa ese punto.",
+            })
+        if not touches_border and not np.any(blocked):
+            contained += 1
+        curtain_cells += int(active.sum())
+        pool_cells += int(new_pool.sum())
+        heights.append(round(drop, 2))
+
+    return {
+        "detected": len(plan.waterfalls),
+        "contained": contained,
+        "cells": curtain_cells,
+        "pool_cells": pool_cells,
+        "support_cells": support_cells,
+        "heights": heights,
+    }
 
 
 def _apply_mass_water(
@@ -226,18 +586,17 @@ def apply_water_system(
     courses: list[WaterCourse],
     config: ProjectConfig,
 ) -> WaterSystemResult:
-    """Compile painted lakes and freehand river objects with per-cell levels.
+    """Compile painted water and automatically designed freehand rivers.
 
-    Painted water remains a simple mass at the configured global level. Rivers
-    are explicit freehand objects: their centerline follows the terrain/ramp
-    profile from high to low, their channel and shore are strictly bounded, and
-    an optional outlet extends the last stroke toward the map boundary so the
-    water can disappear through the mountain ring.
+    The user controls only the horizontal route and visual style. The compiler
+    determines direction, a gentle descending profile, excavation/fill, real
+    waterfalls, plunge pools, banks and exits.
     """
 
     height = source_height.astype(np.float32, copy=True)
     water_mask = np.zeros(height.shape, dtype=np.uint8)
     water_surface = np.full(height.shape, -1, dtype=np.int16)
+    fall_mask = np.zeros(height.shape, dtype=np.uint8)
     exit_mask = np.zeros(height.shape, dtype=np.uint8)
     shore_mask = np.zeros(height.shape, dtype=np.uint8)
     ford_mask = np.zeros(height.shape, dtype=np.uint8)
@@ -249,9 +608,9 @@ def apply_water_system(
 
     map_length, map_width = height.shape
     for course in courses:
-        points, cumulative, surface_profile, user_total_length, reversed_flow, course_issues = _prepare_course_points(course, profile_height)
-        issues.extend(course_issues)
-        if points.shape[0] < 2 or cumulative.size < 2 or float(cumulative[-1]) <= 1e-6:
+        plan = _build_plan(course, profile_height)
+        issues.extend(plan.issues)
+        if plan.points.shape[0] < 2 or plan.cumulative.size < 2 or float(plan.cumulative[-1]) <= 1e-6:
             issues.append({
                 "severity": "error",
                 "code": "water_course_zero_length",
@@ -260,16 +619,18 @@ def apply_water_system(
             continue
 
         half_width = float(course.width) / 2.0
-        outer_radius = half_width + float(course.shore_width)
-        x0 = max(0, int(np.floor(points[:, 0].min() - outer_radius - 1)))
-        x1 = min(map_width - 1, int(np.ceil(points[:, 0].max() + outer_radius + 1)))
-        z0 = max(0, int(np.floor(points[:, 1].min() - outer_radius - 1)))
-        z1 = min(map_length - 1, int(np.ceil(points[:, 1].max() + outer_radius + 1)))
+        style_settings = _style(course)
+        waterfall_margin = max(8.0, half_width + float(course.shore_width) + 6.0)
+        outer_radius = max(half_width + float(course.shore_width), waterfall_margin if plan.waterfalls else 0.0)
+        x0 = max(0, int(np.floor(plan.points[:, 0].min() - outer_radius - 1)))
+        x1 = min(map_width - 1, int(np.ceil(plan.points[:, 0].max() + outer_radius + 1)))
+        z0 = max(0, int(np.floor(plan.points[:, 1].min() - outer_radius - 1)))
+        z1 = min(map_length - 1, int(np.ceil(plan.points[:, 1].max() + outer_radius + 1)))
         zz, xx = np.mgrid[z0:z1 + 1, x0:x1 + 1]
         gx = xx.astype(np.float32)
         gz = zz.astype(np.float32)
-        distance, progress = _polyline_fields(points, cumulative, gx, gz)
-        surface = np.interp(progress, cumulative, surface_profile).astype(np.float32)
+        distance, progress = _polyline_fields(plan.points, plan.cumulative, gx, gz)
+        surface = np.interp(progress, plan.cumulative, plan.surface_profile).astype(np.float32)
         center = distance <= half_width + 1e-6
         road_slice = roads[z0:z1 + 1, x0:x1 + 1] > 0
         protected = road_slice if course.road_policy == "protect" else np.zeros_like(center)
@@ -281,10 +642,14 @@ def apply_water_system(
         ford = active_center & road_slice & (course.road_policy == "ford")
         cut = active_center & road_slice & (course.road_policy == "cut")
         normal = active_center & ~ford
-        terrain_slice[normal] = np.minimum(terrain_slice[normal], floor[normal])
 
+        # Exact assignment lets the automatic profile both carve high ground and
+        # add the missing bed beneath low ground. This is bounded to the river and
+        # its configured shore, never the whole map.
+        terrain_slice[normal] = floor[normal]
         surface_i = np.rint(surface).astype(np.int16)
         if np.any(ford):
+            terrain_slice[ford] = before[ford]
             surface_i[ford] = np.rint(before[ford] + 1.0).astype(np.int16)
 
         local_ford = ford_mask[z0:z1 + 1, x0:x1 + 1]
@@ -294,6 +659,8 @@ def apply_water_system(
 
         local_mask = water_mask[z0:z1 + 1, x0:x1 + 1]
         local_surface = water_surface[z0:z1 + 1, x0:x1 + 1]
+        local_fall = fall_mask[z0:z1 + 1, x0:x1 + 1]
+        local_shore = shore_mask[z0:z1 + 1, x0:x1 + 1]
         local_mask[active_center] = 1
         local_surface[active_center] = np.maximum(local_surface[active_center], surface_i[active_center])
 
@@ -306,34 +673,84 @@ def apply_water_system(
             )
             if np.any(shore):
                 influence = _shore_influence(lateral / float(course.shore_width), course.shore_profile)
-                bank_target = np.minimum(before, surface - 1.0)
-                local_shore = shore_mask[z0:z1 + 1, x0:x1 + 1]
+                # High original ground is carved toward one block below water.
+                # Low ground is raised to the water level at the inner rim and
+                # blended outward, containing Minecraft water without a straight
+                # wall along the entire river.
+                inner_target = np.where(before >= surface, surface - 1.0, surface)
+                blended = before * (1.0 - influence) + inner_target * influence
+                terrain_slice[shore] = blended[shore]
                 local_shore[shore] = 1
-                terrain_slice[shore] = np.minimum(
-                    terrain_slice[shore],
-                    before[shore] * (1.0 - influence[shore]) + bank_target[shore] * influence[shore],
-                )
+
+        waterfall_summary = _apply_automatic_waterfalls(
+            course=course,
+            plan=plan,
+            progress=progress,
+            distance=distance,
+            gx=gx,
+            gz=gz,
+            x0=x0,
+            z0=z0,
+            half_width=half_width,
+            terrain_slice=terrain_slice,
+            road_slice=road_slice,
+            local_mask=local_mask,
+            local_surface=local_surface,
+            local_fall=local_fall,
+            local_shore=local_shore,
+            local_cut=local_cut,
+            issues=issues,
+            map_width=map_width,
+            map_length=map_length,
+        )
 
         if course.exit_enabled:
             local_exit = exit_mask[z0:z1 + 1, x0:x1 + 1]
-            local_exit[active_center & (progress >= user_total_length - 1e-3)] = 1
+            local_exit[active_center & (progress >= plan.user_total_length - 1e-3)] = 1
+
+        center_cut = np.maximum(before[active_center] - terrain_slice[active_center], 0.0)
+        center_fill = np.maximum(terrain_slice[active_center] - before[active_center], 0.0)
+        maximum_cut = float(center_cut.max()) if center_cut.size else 0.0
+        maximum_fill = float(center_fill.max()) if center_fill.size else 0.0
+        if maximum_cut > 18.0:
+            issues.append({
+                "severity": "warning",
+                "code": "water_auto_deep_cut",
+                "message": f"El río «{course.label or course.id}» necesitó una excavación máxima de {maximum_cut:.1f} bloques. Revisa el recorrido si atraviesa una elevación cerrada entre dos zonas bajas.",
+            })
+        if maximum_fill > 10.0:
+            issues.append({
+                "severity": "warning",
+                "code": "water_auto_high_fill",
+                "message": f"El río «{course.label or course.id}» necesitó un soporte máximo de {maximum_fill:.1f} bloques. Revisa el recorrido si cruza una depresión muy profunda.",
+            })
 
         road_cells = int((active_center & road_slice).sum())
         summaries.append({
             "id": course.id,
             "label": course.label,
-            "length": round(float(cumulative[-1]), 3),
+            "length": round(float(plan.cumulative[-1]), 3),
             "width": course.width,
             "depth": course.depth,
             "shore_width": course.shore_width,
             "shore_profile": course.shore_profile,
             "road_policy": course.road_policy,
+            "river_style": course.river_style,
+            "style_label": style_settings["label"],
+            "cascades_detected": waterfall_summary["detected"],
+            "cascades_contained": waterfall_summary["contained"],
+            "cascade_cells": waterfall_summary["cells"],
+            "plunge_pool_cells": waterfall_summary["pool_cells"],
+            "cascade_support_cells": waterfall_summary["support_cells"],
+            "waterfall_heights": waterfall_summary["heights"],
+            "maximum_excavation": round(maximum_cut, 3),
+            "maximum_fill": round(maximum_fill, 3),
             "smoothing": course.smoothing,
             "exit_enabled": course.exit_enabled,
-            "flow_reversed": reversed_flow,
-            "start_surface": round(float(surface_profile[0]), 3),
-            "end_surface": round(float(surface_profile[-1]), 3),
-            "water_cells": int(active_center.sum()),
+            "flow_reversed": plan.reversed_flow,
+            "start_surface": round(float(plan.surface_profile[0]), 3),
+            "end_surface": round(float(plan.surface_profile[-1]), 3),
+            "water_cells": int(active_center.sum()) + int(waterfall_summary["pool_cells"]),
             "road_cells": road_cells,
         })
 
@@ -341,6 +758,7 @@ def apply_water_system(
         height=height,
         water_mask=water_mask,
         water_surface=water_surface,
+        fall_mask=fall_mask,
         exit_mask=exit_mask,
         shore_mask=shore_mask,
         ford_mask=ford_mask,

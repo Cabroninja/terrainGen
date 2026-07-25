@@ -77,7 +77,7 @@ const ACTIONS = {
 const PRESET_GROUPS = {
   brush: {
     label: 'pincel', storageKey: 'jkr-terrain-presets-brush-v1',
-    fields: [['plateau-tool-mode', 'value'], ['plateau-height', 'value'], ['plateau-radius', 'value'], ['plateau-slope-width', 'value'], ['plateau-support-enabled', 'checked'], ['plateau-support-width', 'value'], ['plateau-support-height', 'value'], ['plateau-action', 'value'], ['road-tool-mode', 'value'], ['road-ramp-type', 'value'], ['road-ramp-width', 'value'], ['road-ramp-shoulder', 'value'], ['road-ramp-ratio', 'value'], ['road-ramp-start-landing', 'value'], ['road-ramp-end-landing', 'value'], ['road-ramp-smooth-sides', 'checked'], ['road-ramp-side-ratio', 'value'], ['road-ramp-max-side-width', 'value'], ['road-ramp-side-roundness', 'value'], ['road-ramp-follow-terrain', 'checked'], ['water-tool-mode', 'value'], ['water-mass-action', 'value'], ['water-width', 'value'], ['water-depth', 'value'], ['water-shore-width', 'value'], ['water-shore-profile', 'value'], ['water-road-policy', 'value'], ['water-course-smoothing', 'value'], ['water-course-exit', 'checked'], ['structure-tool-mode', 'value'], ['structure-collection-select', 'value'], ['structure-brush-size', 'value'], ['structure-density', 'value'], ['structure-spacing', 'value'], ['structure-sink', 'value'], ['structure-random-rotation', 'checked'], ['structure-random-mirror', 'checked'], ['structure-avoid-water', 'checked'], ['structure-avoid-roads', 'checked'], ['structure-avoid-reserved', 'checked'], ['brush-size', 'value'], ['brush-core-mode', 'checked'], ['brush-core-radius', 'value'], ['brush-hardness', 'value'], ['elevation-profile-enabled', 'checked'], ['brush-slope-width', 'value'], ['brush-base-enabled', 'checked'], ['brush-base-width', 'value'], ['brush-base-intensity', 'value'], ['brush-profile-shape', 'value'], ['brush-terrace-steps', 'value'], ['brush-strict-clip', 'checked'], ['brush-opacity', 'value'], ['brush-strength', 'value'], ['brush-shape', 'value'], ['stroke-mode', 'value'], ['stroke-accumulation', 'checked']],
+    fields: [['plateau-tool-mode', 'value'], ['plateau-height', 'value'], ['plateau-radius', 'value'], ['plateau-slope-width', 'value'], ['plateau-support-enabled', 'checked'], ['plateau-support-width', 'value'], ['plateau-support-height', 'value'], ['plateau-action', 'value'], ['road-tool-mode', 'value'], ['road-ramp-type', 'value'], ['road-ramp-width', 'value'], ['road-ramp-shoulder', 'value'], ['road-ramp-ratio', 'value'], ['road-ramp-start-landing', 'value'], ['road-ramp-end-landing', 'value'], ['road-ramp-smooth-sides', 'checked'], ['road-ramp-side-ratio', 'value'], ['road-ramp-max-side-width', 'value'], ['road-ramp-side-roundness', 'value'], ['road-ramp-follow-terrain', 'checked'], ['water-tool-mode', 'value'], ['water-mass-action', 'value'], ['water-width', 'value'], ['water-depth', 'value'], ['water-shore-width', 'value'], ['water-shore-profile', 'value'], ['water-road-policy', 'value'], ['water-river-style', 'value'], ['water-course-smoothing', 'value'], ['water-course-exit', 'checked'], ['structure-tool-mode', 'value'], ['structure-collection-select', 'value'], ['structure-brush-size', 'value'], ['structure-density', 'value'], ['structure-spacing', 'value'], ['structure-sink', 'value'], ['structure-random-rotation', 'checked'], ['structure-random-mirror', 'checked'], ['structure-avoid-water', 'checked'], ['structure-avoid-roads', 'checked'], ['structure-avoid-reserved', 'checked'], ['brush-size', 'value'], ['brush-core-mode', 'checked'], ['brush-core-radius', 'value'], ['brush-hardness', 'value'], ['elevation-profile-enabled', 'checked'], ['brush-slope-width', 'value'], ['brush-base-enabled', 'checked'], ['brush-base-width', 'value'], ['brush-base-intensity', 'value'], ['brush-profile-shape', 'value'], ['brush-terrace-steps', 'value'], ['brush-strict-clip', 'checked'], ['brush-opacity', 'value'], ['brush-strength', 'value'], ['brush-shape', 'value'], ['stroke-mode', 'value'], ['stroke-accumulation', 'checked']],
   },
   compilation: {
     label: 'compilación', storageKey: 'jkr-terrain-presets-compilation-v1',
@@ -165,6 +165,7 @@ class TerrainEditor {
     $('water-shore-width').value = readPreference('jkr-terrain-water-shore-width', '6');
     $('water-shore-profile').value = readPreference('jkr-terrain-water-shore-profile', 'natural');
     $('water-road-policy').value = readPreference('jkr-terrain-water-road-policy', 'protect');
+    $('water-river-style').value = readPreference('jkr-terrain-water-river-style', 'natural');
     $('water-course-smoothing').value = readPreference('jkr-terrain-water-course-smoothing', '60');
     $('water-course-exit').checked = readPreference('jkr-terrain-water-course-exit', 'false') === 'true';
     $('structure-tool-mode').value = readPreference('jkr-terrain-structure-tool-mode', 'populate');
@@ -248,7 +249,7 @@ class TerrainEditor {
     $('water-tool-mode').addEventListener('change', () => { const nextMode = $('water-tool-mode').value; this.rememberWaterControlSettings(this.lastWaterMode); this.lastWaterMode = nextMode; this.applyWaterControlSettings(nextMode === 'mass' ? this.massWaterSettings : this.riverWaterSettings); writePreference('jkr-terrain-water-tool-mode', nextMode); this.cancelWaterCourseDraft(); this.updateLayerControls(); this.renderOverlay(); });
     $('water-mass-action').addEventListener('change', () => { writePreference('jkr-terrain-water-mass-action', $('water-mass-action').value); this.rememberWaterControlSettings('mass'); this.updateWaterUi(); this.renderOverlay(); });
     for (const id of ['water-width', 'water-depth', 'water-shore-width', 'water-course-smoothing']) $(id).addEventListener('input', () => { writePreference(`jkr-terrain-${id}`, $(id).value); this.rememberWaterControlSettings($('water-tool-mode').value); this.updateWaterUi(); this.renderOverlay(); });
-    for (const id of ['water-shore-profile', 'water-road-policy']) $(id).addEventListener('change', () => { writePreference(`jkr-terrain-${id}`, $(id).value); this.rememberWaterControlSettings($('water-tool-mode').value); this.updateWaterUi(); this.renderOverlay(); });
+    for (const id of ['water-shore-profile', 'water-road-policy', 'water-river-style']) $(id).addEventListener('change', () => { writePreference(`jkr-terrain-${id}`, $(id).value); this.rememberWaterControlSettings($('water-tool-mode').value); this.updateWaterUi(); this.renderOverlay(); });
     $('water-course-exit').addEventListener('change', () => { writePreference('jkr-terrain-water-course-exit', String($('water-course-exit').checked)); this.rememberWaterControlSettings('river'); this.updateWaterUi(); this.renderOverlay(); });
     $('structure-tool-mode').addEventListener('change', () => { writePreference('jkr-terrain-structure-tool-mode', $('structure-tool-mode').value); this.updateStructureUi(); this.renderOverlay(); });
     $('structure-collection-select').addEventListener('change', () => { this.renderStructureAssets(); this.updateStructureUi(); this.renderOverlay(); });
@@ -600,6 +601,7 @@ class TerrainEditor {
       shoreWidth: $('water-shore-width').value,
       shoreProfile: $('water-shore-profile').value,
       roadPolicy: $('water-road-policy').value,
+      riverStyle: $('water-river-style').value,
       smoothing: $('water-course-smoothing').value,
       exitEnabled: $('water-course-exit').checked,
     });
@@ -614,7 +616,7 @@ class TerrainEditor {
   applyWaterControlSettings(settings) {
     if (!settings) return;
     $('water-width').value = settings.width; $('water-depth').value = settings.depth; $('water-shore-width').value = settings.shoreWidth;
-    $('water-shore-profile').value = settings.shoreProfile; $('water-road-policy').value = settings.roadPolicy;
+    $('water-shore-profile').value = settings.shoreProfile; $('water-road-policy').value = settings.roadPolicy; $('water-river-style').value = settings.riverStyle;
     if (settings.mode === 'mass') $('water-mass-action').value = settings.action; else { $('water-course-smoothing').value = settings.smoothing; $('water-course-exit').checked = settings.exitEnabled; }
   }
 
@@ -627,6 +629,7 @@ class TerrainEditor {
       shoreWidth: $('water-shore-width').value,
       shoreProfile: $('water-shore-profile').value,
       roadPolicy: $('water-road-policy').value,
+      riverStyle: $('water-river-style').value,
       smoothing: $('water-course-smoothing').value,
       exitEnabled: $('water-course-exit').checked,
     });
@@ -640,8 +643,9 @@ class TerrainEditor {
     $('water-course-apply').disabled = !this.waterCourseEditingId || this.waterCourseDraft.length < 2;
     if (river) {
       const draftLength = courseLength(this.waterCourseDraft);
-      const editText = this.waterCourseEditingId ? 'Editando un río guardado. Cambia controles y pulsa Aplicar, o dibuja un recorrido nuevo para reemplazarlo.' : 'Mantén clic y dibuja libremente. Al soltar se crea un río editable.';
-      $('water-course-info').textContent = this.waterCourseDraft.length >= 2 ? `${editText} Recorrido actual: ${draftLength.toFixed(1)} bloques · ${this.waterCourseDraft.length} muestras.` : editText;
+      const editText = this.waterCourseEditingId ? 'Editando un río guardado. Cambia controles y pulsa Aplicar, o dibuja un recorrido nuevo para reemplazarlo.' : 'Mantén clic y dibuja libremente. La aplicación resolverá automáticamente alturas, cauce, cascadas y pozas.';
+      const styles = { calm: 'tranquilo', natural: 'natural', mountain: 'montañoso' };
+      $('water-course-info').textContent = this.waterCourseDraft.length >= 2 ? `${editText} Recorrido actual: ${draftLength.toFixed(1)} bloques · ${this.waterCourseDraft.length} muestras · estilo ${styles[settings.riverStyle]}.` : `${editText} Estilo actual: ${styles[settings.riverStyle]}.`;
     } else {
       const profiles = { compact: 'compacta', natural: 'natural', smooth: 'suave' };
       const action = settings.action === 'erase' ? 'Borra' : 'Pinta';
@@ -679,12 +683,12 @@ class TerrainEditor {
     const course = {
       id, label: $('water-course-label').value.trim().slice(0, 80) || current?.label || `Río ${position + 1}`,
       points: structuredClone(points), width: settings.width, depth: settings.depth, shore_width: settings.shoreWidth,
-      shore_profile: settings.shoreProfile, road_policy: settings.roadPolicy, smoothing: settings.smoothing, exit_enabled: settings.exitEnabled,
+      shore_profile: settings.shoreProfile, road_policy: settings.roadPolicy, river_style: settings.riverStyle, smoothing: settings.smoothing, exit_enabled: settings.exitEnabled,
     };
     if (editingId) this.waterCourses = this.waterCourses.map((item) => item.id === editingId ? course : item); else this.waterCourses.push(course);
     this.selectedWaterCourseId = id; this.waterCourseEditingId = null; this.waterCourseDraft = []; $('water-course-label').value = ''; this.riverWaterSettings = settings; this.lastWaterMode = 'river';
     this.pushHistory({ type: 'waterCourses', before, after: structuredClone(this.waterCourses) }); this.updateWaterUi(); this.renderOverlay();
-    this.message(`${editingId ? 'Río actualizado' : 'Río creado'}: ${course.label}. Compila la vista para revisar su profundidad y niveles.`);
+    this.message(`${editingId ? 'Río actualizado' : 'Río creado'}: ${course.label}. Compila para que el perfil automático resuelva alturas, cascadas y pozas.`);
   }
 
   applyWaterCourseEdits() {
@@ -700,7 +704,7 @@ class TerrainEditor {
     const course = this.waterCourses.find((item) => item.id === id); if (!course) return;
     this.rememberWaterControlSettings(this.lastWaterMode); this.setActiveLayer('water'); $('water-tool-mode').value = 'river'; this.lastWaterMode = 'river'; this.selectedWaterCourseId = id; this.waterCourseEditingId = id; this.waterCourseDraft = structuredClone(course.points);
     $('water-course-label').value = course.label || ''; $('water-width').value = course.width; $('water-depth').value = course.depth; $('water-shore-width').value = course.shore_width;
-    $('water-shore-profile').value = course.shore_profile; $('water-road-policy').value = course.road_policy; $('water-course-smoothing').value = course.smoothing ?? 60; $('water-course-exit').checked = Boolean(course.exit_enabled);
+    $('water-shore-profile').value = course.shore_profile; $('water-road-policy').value = course.road_policy; $('water-river-style').value = course.river_style || 'natural'; $('water-course-smoothing').value = course.smoothing ?? 60; $('water-course-exit').checked = Boolean(course.exit_enabled);
     this.riverWaterSettings = this.captureWaterControlSettings('river');
     this.updateLayerControls(); this.renderOverlay(); this.message('Río cargado. Puedes cambiar sus controles y aplicar, o dibujar un recorrido nuevo para reemplazarlo.');
   }
@@ -718,7 +722,7 @@ class TerrainEditor {
       const item = document.createElement('div'); item.className = `road-ramp-item${course.id === this.selectedWaterCourseId ? ' selected' : ''}`;
       const content = document.createElement('button'); content.type = 'button'; content.className = 'road-ramp-select'; content.addEventListener('click', () => { this.selectedWaterCourseId = course.id; this.renderWaterCourseList(); this.renderOverlay(); });
       const title = document.createElement('strong'); title.textContent = course.label || course.id; const meta = document.createElement('small');
-      meta.textContent = `ancho ${course.width} · profundidad ${course.depth} · orilla ${course.shore_width} · ${course.points.length} puntos${course.exit_enabled ? ' · salida' : ''}`;
+      const styleLabels = { calm: 'tranquilo', natural: 'natural', mountain: 'montañoso' }; meta.textContent = `ancho ${course.width} · profundidad ${course.depth} · orilla ${course.shore_width} · automático ${styleLabels[course.river_style || 'natural']} · ${course.points.length} puntos${course.exit_enabled ? ' · salida' : ''}`;
       content.append(title, meta); const actions = document.createElement('div'); actions.className = 'road-ramp-item-actions';
       const edit = document.createElement('button'); edit.type = 'button'; edit.textContent = 'Editar'; edit.addEventListener('click', () => this.editWaterCourse(course.id));
       const remove = document.createElement('button'); remove.type = 'button'; remove.textContent = 'Eliminar'; remove.className = 'danger-soft'; remove.addEventListener('click', () => this.deleteWaterCourse(course.id));
@@ -737,7 +741,7 @@ class TerrainEditor {
 
   drawWaterCourses(ctx) {
     if (!this.visibility.water && this.activeLayer !== 'water') return;
-    for (const course of this.waterCourses) this.drawWaterCoursePath(ctx, course.points, normalizeWaterSettings({ mode: 'river', width: course.width, depth: course.depth, shoreWidth: course.shore_width, shoreProfile: course.shore_profile, roadPolicy: course.road_policy, smoothing: course.smoothing, exitEnabled: course.exit_enabled }), course.id === this.selectedWaterCourseId, false);
+    for (const course of this.waterCourses) this.drawWaterCoursePath(ctx, course.points, normalizeWaterSettings({ mode: 'river', width: course.width, depth: course.depth, shoreWidth: course.shore_width, shoreProfile: course.shore_profile, roadPolicy: course.road_policy, riverStyle: course.river_style || 'natural', smoothing: course.smoothing, exitEnabled: course.exit_enabled }), course.id === this.selectedWaterCourseId, false);
     if (this.activeLayer === 'water' && $('water-tool-mode').value === 'river' && this.waterCourseDraft.length) this.drawWaterCoursePath(ctx, this.waterCourseDraft, this.waterSettings(), true, true);
   }
 
@@ -1576,7 +1580,7 @@ class TerrainEditor {
       const config = project.config; const width = Number(config.width); const length = Number(config.length); const expected = width * length;
       if (width < MIN_MAP_SIZE || width > MAX_MAP_SIZE || length < MIN_MAP_SIZE || length > MAX_MAP_SIZE || width % 16 || length % 16) throw new Error('Dimensiones inválidas.');
       const decoded = {}; for (const name of Object.keys(LAYERS)) { if (!project.layers?.[name]) { if (name === 'structures') { decoded[name] = new Uint8Array(expected); continue; } throw new Error(`Falta la capa ${name}.`); } decoded[name] = decodeRle(project.layers[name].data, expected); }
-      this.width = width; this.length = length; this.layers = decoded; this.markers = Array.isArray(project.markers) ? project.markers : []; this.roadRamps = Array.isArray(project.road_ramps) ? project.road_ramps.map((ramp) => ({ kind: ramp.kind === 'terrain' ? 'terrain' : 'road', ...ramp })) : []; this.waterCourses = Array.isArray(project.water_courses) ? project.water_courses : []; this.structureAssets = Array.isArray(project.structure_assets) ? project.structure_assets : []; this.structureCollections = Array.isArray(project.structure_collections) ? project.structure_collections : []; this.structurePlacements = Array.isArray(project.structure_placements) ? project.structure_placements : []; this.roadRampDraft = []; this.roadRampDraftKind = null; this.roadRampEditingId = null; this.selectedRoadRampId = null; this.waterCourseDraft = []; this.waterCourseEditingId = null; this.selectedWaterCourseId = null; this.playableBoundaryCache = null; this.playableBoundaryPathCache = null; for (const name of Object.keys(LAYERS)) { this.visibility[name] = true; this.locked[name] = false; } this.buildLayerList();
+      this.width = width; this.length = length; this.layers = decoded; this.markers = Array.isArray(project.markers) ? project.markers : []; this.roadRamps = Array.isArray(project.road_ramps) ? project.road_ramps.map((ramp) => ({ kind: ramp.kind === 'terrain' ? 'terrain' : 'road', ...ramp })) : []; this.waterCourses = Array.isArray(project.water_courses) ? project.water_courses.map((course) => ({ river_style: course.river_style || 'natural', ...course })) : []; this.structureAssets = Array.isArray(project.structure_assets) ? project.structure_assets : []; this.structureCollections = Array.isArray(project.structure_collections) ? project.structure_collections : []; this.structurePlacements = Array.isArray(project.structure_placements) ? project.structure_placements : []; this.roadRampDraft = []; this.roadRampDraftKind = null; this.roadRampEditingId = null; this.selectedRoadRampId = null; this.waterCourseDraft = []; this.waterCourseEditingId = null; this.selectedWaterCourseId = null; this.playableBoundaryCache = null; this.playableBoundaryPathCache = null; for (const name of Object.keys(LAYERS)) { this.visibility[name] = true; this.locked[name] = false; } this.buildLayerList();
       try { await this.loadStructureLibrary({ merge: true }); } catch (error) { this.setLibraryStatus(`Sin conexión: ${error.message}`, true); }
       this.canvas.width = width; this.canvas.height = length; this.overlay.width = width; this.overlay.height = length; this.setConfigInputs(config); this.undoStack.length = 0; this.redoStack.length = 0; this.applyZoom(); this.render(); this.renderMarkers(); this.updateSizeInfo(); this.updateHistory(); this.updatePlateauUi(); this.renderRoadRampList(); this.renderWaterCourseList(); this.updateWaterUi(); this.refreshStructureCollectionSelect(); this.updateStructureUi(); this.dirty = false; $('dirty-badge').textContent = 'Cargado'; $('dirty-badge').className = 'badge ok'; this.message(`Proyecto ${file.name} cargado.`);
     } catch (error) { this.message(`No se pudo abrir: ${error.message}`, true); }

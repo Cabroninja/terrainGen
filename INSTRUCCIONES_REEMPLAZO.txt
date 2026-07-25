@@ -1,0 +1,18 @@
+JKR Terrain Generator v5.3.0 — Río automático
+
+Este ZIP no contiene una carpeta contenedora adicional.
+Descomprímelo desde la raíz del proyecto:
+
+  unzip -o JKR-Terrain-Generator-v5.3.0-RIO-AUTOMATICO-PARCHE.zip
+  docker compose up -d --build
+
+Después recarga el navegador con Ctrl + F5.
+
+Archivos reemplazados:
+- app/core/models.py
+- app/terrain/water_courses.py
+- app/static/app.js
+- app/static/config-help.json
+- app/static/index.html
+- app/static/water-course-tool.js
+- tests/test_water_courses.py

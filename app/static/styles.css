@@ -2595,3 +2595,24 @@ body.ui-resizing-results-drawer * {
     grid-row: 3;
   }
 }
+
+/* v5.2: controles compactos de contención localizada de cascadas */
+.cascade-containment-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 112px;
+  gap: 5px 6px;
+  padding: 5px 6px;
+  border: 1px solid var(--ui-line-soft, var(--ui-line));
+  border-radius: 3px;
+  background: rgba(86, 184, 232, 0.045);
+}
+
+.cascade-containment-fields > .toggle-row {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 780px) {
+  .cascade-containment-fields {
+    grid-template-columns: 1fr;
+  }
+}

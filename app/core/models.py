@@ -110,6 +110,13 @@ class WaterCourse(BaseModel):
     shore_width: int = Field(default=6, ge=0, le=128)
     shore_profile: Literal["compact", "natural", "smooth"] = "natural"
     road_policy: Literal["protect", "ford", "cut"] = "protect"
+    river_style: Literal["calm", "natural", "mountain"] = "natural"
+    # Campos heredados de las versiones 5.1–5.2.5. Se conservan únicamente
+    # para abrir proyectos antiguos; el generador automático ya no los usa.
+    relief_mode: Literal["downhill", "follow"] = "downhill"
+    cascade_containment: bool = False
+    cascade_threshold: int = Field(default=2, ge=2, le=16)
+    downhill_slope_ratio: float = Field(default=4.0, ge=1.0, le=12.0)
     smoothing: int = Field(default=60, ge=0, le=100)
     exit_enabled: bool = False
 

@@ -27,12 +27,12 @@ DATA_DIR = Path(os.getenv("DATA_DIR", BASE_DIR / "data"))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 LIBRARY = LibraryStore(DATA_DIR / "library")
 
-app = FastAPI(title="JKR Terrain Generator", version="5.0.0")
+app = FastAPI(title="JKR Terrain Generator", version="5.2.0")
 
 
 @app.get("/api/health")
 def health() -> dict:
-    return {"status": "ok", "version": "5.0.0", "architecture": "paint-first", "library": "server"}
+    return {"status": "ok", "version": "5.2.0", "architecture": "paint-first", "library": "server"}
 
 
 @app.post("/api/structures/import")

@@ -69,3 +69,50 @@ def test_variable_river_levels_match_schematic_blocks():
         floor = int(terrain.height[z, x])
         assert blocks[surface, z, x] == PALETTE["minecraft:water[level=0]"]
         assert blocks[floor, z, x] != PALETTE["minecraft:water[level=0]"]
+
+
+def test_supported_downhill_descent_exports_bounded_water_over_solid_bed():
+    import numpy as np
+
+    from app.core.models import ProjectDocument
+    from app.core.rle import encode_rle_u8
+    from app.exporters.blocks import PALETTE
+    from app.exporters.schematic import build_block_data
+    from tests.helpers import project_payload
+
+    payload = project_payload(width=64, length=64, height=192)
+    base = np.full((64, 64), 70, dtype=np.uint8)
+    base[:, :32] = 110
+    payload["layers"]["height_base"]["data"] = encode_rle_u8(base)
+    payload["water_courses"] = [{
+        "id": "downhill_support_export",
+        "points": [
+            {"x": 8, "z": 32}, {"x": 24, "z": 32}, {"x": 31, "z": 32},
+            {"x": 32, "z": 32}, {"x": 40, "z": 32}, {"x": 56, "z": 32},
+        ],
+        "width": 7,
+        "depth": 3,
+        "shore_width": 5,
+        "shore_profile": "natural",
+        "road_policy": "protect",
+        "relief_mode": "downhill",
+        "cascade_containment": True,
+        "cascade_threshold": 2,
+        "smoothing": 0,
+        "exit_enabled": False,
+    }]
+    project = ProjectDocument.model_validate(payload)
+    terrain = compile_project(project)
+    summary = terrain.validation["water_system"]["items"][0]
+    assert summary["cascades_contained"] >= 1
+    assert summary["cascade_support_cells"] > 0
+
+    blocks = build_block_data(project.config, terrain).reshape((project.config.schematic_height, 64, 64))
+    wet_cells = np.argwhere(terrain.water_mask > 0)
+    assert wet_cells.size
+    for z, x in wet_cells[::max(1, len(wet_cells) // 20)]:
+        floor = int(terrain.height[z, x])
+        surface = int(terrain.water_surface[z, x])
+        assert 1 <= surface - floor <= 4
+        assert blocks[surface, z, x] == PALETTE["minecraft:water[level=0]"]
+        assert blocks[floor, z, x] != PALETTE["minecraft:water[level=0]"]

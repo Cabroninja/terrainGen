@@ -29,6 +29,7 @@ def write_voxel_source(
     np.save(voxel_dir / "playable.npy", terrain.playable_mask.astype(np.uint8, copy=False), allow_pickle=False)
     np.save(voxel_dir / "water.npy", terrain.water_mask.astype(np.uint8, copy=False), allow_pickle=False)
     np.save(voxel_dir / "water_surface.npy", terrain.water_surface.astype(np.int16, copy=False), allow_pickle=False)
+    np.save(voxel_dir / "water_fall.npy", terrain.water_fall_mask.astype(np.uint8, copy=False), allow_pickle=False)
     structure_dir = voxel_dir / "structures"
     structure_dir.mkdir(parents=True, exist_ok=True)
     grouped: dict[tuple[int, int], list[list[int]]] = {}
@@ -100,6 +101,8 @@ def read_voxel_chunk(output_dir: Path, chunk_x: int, chunk_z: int) -> dict:
     water = np.load(voxel_dir / "water.npy", mmap_mode="r", allow_pickle=False)
     water_surface_path = voxel_dir / "water_surface.npy"
     water_surface = np.load(water_surface_path, mmap_mode="r", allow_pickle=False) if water_surface_path.is_file() else None
+    water_fall_path = voxel_dir / "water_fall.npy"
+    water_fall = np.load(water_fall_path, mmap_mode="r", allow_pickle=False) if water_fall_path.is_file() else None
 
     width = int(manifest["width"])
     length = int(manifest["length"])
@@ -123,6 +126,7 @@ def read_voxel_chunk(output_dir: Path, chunk_x: int, chunk_z: int) -> dict:
         wss[ws == 0] = -1
     else:
         wss = np.asarray(water_surface[z0:z1, x0:x1], dtype=np.int16)
+    wfs = np.zeros(ws.shape, dtype=np.uint8) if water_fall is None else np.asarray(water_fall[z0:z1, x0:x1], dtype=np.uint8)
 
     tops = np.empty_like(ms, dtype=np.uint8)
     for local_z in range(ms.shape[0]):
@@ -161,5 +165,6 @@ def read_voxel_chunk(output_dir: Path, chunk_x: int, chunk_z: int) -> dict:
         "playable": ps.ravel(order="C").tolist(),
         "water": ws.ravel(order="C").tolist(),
         "water_surface": wss.ravel(order="C").tolist(),
+        "water_fall": wfs.ravel(order="C").tolist(),
         "structure_blocks": structure_blocks,
     }
