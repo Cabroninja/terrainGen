@@ -2205,9 +2205,9 @@ body.ui-resizing-column .results-splitter::before {
 
 .results-drawer-content {
   grid-template-columns:
-    minmax(170px, var(--ui-validation-width))
+    minmax(120px, var(--ui-validation-width))
     var(--ui-splitter-size)
-    minmax(300px, 1fr);
+    minmax(220px, 1fr);
 }
 
 .validation-panel {
@@ -2306,9 +2306,9 @@ label.has-inline-help {
   .results-drawer-content {
     grid-template-columns: 1fr;
     grid-template-rows:
-      minmax(90px, var(--ui-validation-height))
+      minmax(80px, var(--ui-validation-height))
       var(--ui-splitter-size)
-      minmax(220px, 1fr);
+      minmax(170px, 1fr);
     overflow: hidden;
   }
 
@@ -2341,8 +2341,8 @@ label.has-inline-help {
 
 .results-drawer {
   height: var(--ui-results-drawer-height);
-  min-height: 180px;
-  max-height: calc(100vh - var(--ui-topbar-height) - 18px);
+  min-height: 150px;
+  max-height: calc(100vh - var(--ui-topbar-height) - 120px);
   grid-template-rows:
     var(--ui-splitter-size)
     auto
@@ -2376,8 +2376,8 @@ body.ui-resizing-results-drawer * {
 @media (max-width: 700px) {
   .results-drawer {
     height: var(--ui-results-drawer-height);
-    min-height: 240px;
-    max-height: calc(100vh - var(--ui-topbar-height) - 8px);
+    min-height: 210px;
+    max-height: calc(100vh - var(--ui-topbar-height) - 96px);
   }
 }
 
@@ -2466,9 +2466,9 @@ body.results-dock-right .results-drawer {
   left: auto;
   width: var(--ui-results-drawer-width);
   height: auto;
-  min-width: 300px;
+  min-width: 260px;
   min-height: 0;
-  max-width: calc(100vw - 520px);
+  max-width: calc(100vw - clamp(300px, 32vw, 420px));
   max-height: none;
   grid-template-columns: var(--ui-splitter-size) minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr);
@@ -2503,9 +2503,9 @@ body.results-dock-right .results-drawer-content {
   grid-row: 2;
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows:
-    minmax(90px, var(--ui-validation-height))
+    minmax(80px, var(--ui-validation-height))
     var(--ui-splitter-size)
-    minmax(280px, 1fr);
+    minmax(180px, 1fr);
 }
 
 body.results-dock-right .validation-panel {

@@ -17,9 +17,14 @@ function writeUiState(patch) {
 
 
 const splitterRefreshers = [];
+let splitterRefreshFrame = 0;
 
 function refreshResizableSplitters() {
-  requestAnimationFrame(() => splitterRefreshers.forEach((refresh) => refresh()));
+  if (splitterRefreshFrame) return;
+  splitterRefreshFrame = requestAnimationFrame(() => {
+    splitterRefreshFrame = 0;
+    splitterRefreshers.forEach((refresh) => refresh());
+  });
 }
 
 function clamp(value, minimum, maximum) {
@@ -62,12 +67,17 @@ function bindResizableSplitter({
     splitter.setAttribute('aria-valuenow', String(Math.round(ratio * 100)));
   };
 
-  const finishDrag = () => {
+  const finishDrag = (event) => {
     if (!drag) return;
-    splitter.releasePointerCapture?.(drag.pointerId);
+    if (event?.pointerId != null && event.pointerId !== drag.pointerId) return;
+    const pointerId = drag.pointerId;
     drag = null;
     document.body.classList.remove('ui-resizing-row', 'ui-resizing-column');
+    try {
+      if (splitter.hasPointerCapture?.(pointerId)) splitter.releasePointerCapture(pointerId);
+    } catch (_) { /* La captura ya pudo ser liberada por el navegador. */ }
     writeUiState({ [getStorageKey()]: ratio });
+    notifyViewportResize();
   };
 
   splitter.addEventListener('pointerdown', (event) => {
@@ -85,14 +95,16 @@ function bindResizableSplitter({
     document.body.classList.add(axis === 'y' ? 'ui-resizing-row' : 'ui-resizing-column');
   });
 
-  splitter.addEventListener('pointermove', (event) => {
+  const moveDrag = (event) => {
     if (!drag || drag.pointerId !== event.pointerId) return;
     const pointerPosition = drag.axis === 'y' ? event.clientY - drag.rect.top : event.clientX - drag.rect.left;
     apply(pointerPosition / drag.total);
-  });
+  };
 
-  splitter.addEventListener('pointerup', finishDrag);
-  splitter.addEventListener('pointercancel', finishDrag);
+  window.addEventListener('pointermove', moveDrag);
+  window.addEventListener('pointerup', finishDrag);
+  window.addEventListener('pointercancel', finishDrag);
+  window.addEventListener('blur', finishDrag);
   splitter.addEventListener('lostpointercapture', finishDrag);
 
   splitter.addEventListener('keydown', (event) => {
@@ -109,8 +121,10 @@ function bindResizableSplitter({
   });
 
   const refresh = () => {
-    const stored = Number(readUiState()[getStorageKey()]);
-    if (Number.isFinite(stored)) ratio = stored;
+    if (!drag) {
+      const stored = Number(readUiState()[getStorageKey()]);
+      if (Number.isFinite(stored)) ratio = stored;
+    }
     apply(ratio);
   };
   splitterRefreshers.push(refresh);
@@ -155,11 +169,16 @@ function bindResultsDrawerSize() {
   let drag = null;
 
   const topbarHeight = () => parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--ui-topbar-height')) || 42;
-  const minimumHeight = () => matchMedia('(max-width: 700px)').matches ? 240 : 180;
-  const maximumHeight = () => Math.max(minimumHeight(), window.innerHeight - topbarHeight() - 18);
+  const minimumHeight = () => matchMedia('(max-width: 700px)').matches ? 210 : 150;
+  const editorMinimumHeight = () => matchMedia('(max-width: 700px)').matches ? 96 : 120;
+  const maximumHeight = () => Math.max(
+    minimumHeight(),
+    window.innerHeight - topbarHeight() - editorMinimumHeight(),
+  );
   const defaultHeight = () => Math.min(window.innerHeight * (matchMedia('(max-width: 700px)').matches ? 0.70 : 0.52), 520);
-  const minimumWidth = () => Math.min(380, Math.max(300, window.innerWidth * 0.30));
-  const maximumWidth = () => Math.max(minimumWidth(), window.innerWidth - 520);
+  const minimumWidth = () => Math.min(360, Math.max(260, window.innerWidth * 0.24));
+  const editorMinimumWidth = () => Math.min(420, Math.max(300, window.innerWidth * 0.32));
+  const maximumWidth = () => Math.max(minimumWidth(), window.innerWidth - editorMinimumWidth());
   const defaultWidth = () => Math.min(window.innerWidth * 0.44, 720);
 
   const apply = () => {
@@ -187,12 +206,15 @@ function bindResultsDrawerSize() {
     }
   };
 
-  const finishDrag = () => {
+  const finishDrag = (event) => {
     if (!drag) return;
-    splitter.releasePointerCapture?.(drag.pointerId);
-    const mode = drag.mode;
+    if (event?.pointerId != null && event.pointerId !== drag.pointerId) return;
+    const { pointerId, mode } = drag;
     drag = null;
     document.body.classList.remove('ui-resizing-results-drawer-row', 'ui-resizing-results-drawer-column');
+    try {
+      if (splitter.hasPointerCapture?.(pointerId)) splitter.releasePointerCapture(pointerId);
+    } catch (_) { /* La captura ya pudo ser liberada por el navegador. */ }
     if (mode === 'right') writeUiState({ resultsDrawerWidth: Math.round(width) });
     else writeUiState({ resultsDrawerHeight: Math.round(height) });
     notifyViewportResize();
@@ -215,16 +237,17 @@ function bindResultsDrawerSize() {
     document.body.classList.add(mode === 'right' ? 'ui-resizing-results-drawer-column' : 'ui-resizing-results-drawer-row');
   });
 
-  splitter.addEventListener('pointermove', (event) => {
+  const moveDrag = (event) => {
     if (!drag || drag.pointerId !== event.pointerId) return;
     if (drag.mode === 'right') width = drag.startWidth + (drag.startX - event.clientX);
     else height = drag.startHeight + (drag.startY - event.clientY);
     apply();
-    notifyViewportResize();
-  });
+  };
 
-  splitter.addEventListener('pointerup', finishDrag);
-  splitter.addEventListener('pointercancel', finishDrag);
+  window.addEventListener('pointermove', moveDrag);
+  window.addEventListener('pointerup', finishDrag);
+  window.addEventListener('pointercancel', finishDrag);
+  window.addEventListener('blur', finishDrag);
   splitter.addEventListener('lostpointercapture', finishDrag);
 
   splitter.addEventListener('keydown', (event) => {
@@ -268,11 +291,13 @@ function bindResultsDrawerSize() {
   });
 
   const refresh = () => {
-    const state = readUiState();
-    const storedHeight = Number(state.resultsDrawerHeight);
-    const storedWidth = Number(state.resultsDrawerWidth);
-    if (Number.isFinite(storedHeight)) height = storedHeight;
-    if (Number.isFinite(storedWidth)) width = storedWidth;
+    if (!drag) {
+      const state = readUiState();
+      const storedHeight = Number(state.resultsDrawerHeight);
+      const storedWidth = Number(state.resultsDrawerWidth);
+      if (Number.isFinite(storedHeight)) height = storedHeight;
+      if (Number.isFinite(storedWidth)) width = storedWidth;
+    }
     apply();
   };
   splitterRefreshers.push(refresh);
@@ -302,8 +327,8 @@ function bindResizableSplitters() {
     getCssVariable: (axis) => axis === 'y' ? '--ui-validation-height' : '--ui-validation-width',
     defaultRatio: getResultsDockMode() === 'right' ? 0.24 : (compactResults.matches ? 0.25 : 0.22),
     getMinimums: (axis) => axis === 'y'
-      ? ({ start: 90, end: getResultsDockMode() === 'right' ? 280 : 220 })
-      : ({ start: 170, end: 300 }),
+      ? ({ start: 80, end: getResultsDockMode() === 'right' ? 180 : 170 })
+      : ({ start: 120, end: 220 }),
   });
   compactResults.addEventListener?.('change', refreshResizableSplitters);
   bindResultsDrawerSize();

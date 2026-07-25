@@ -2,7 +2,7 @@ import { initializeHelp } from './config-help.js';
 import { Terrain3DViewer } from './terrain-viewer.js';
 import { VoxelTerrainViewer } from './voxel-viewer.js';
 import { normalizeElevationProfile, elevationProfileInfluence } from './brush-profile.js';
-import { normalizePlateauSettings, plateauInfluence, heightToLayerValue, layerValueToHeight, normalizePlateauObject, rasterizePlateauObjects, plateauObjectContainsPoint } from './plateau-tool.js';
+import { normalizePlateauSettings, plateauInfluence, heightToLayerValue, layerValueToHeight, normalizePlateauObject, rasterizePlateauObjects, plateauObjectContainsPoint, plateauObjectStrokes, plateauObjectsCanMerge, mergePlateauObjects } from './plateau-tool.js';
 import { normalizeRoadRampSettings, analyzeRoadRamp } from './road-ramp-tool.js';
 import { normalizeWaterSettings, smoothFreehandCourse, courseLength } from './water-course-tool.js';
 import { normalizeStructureSettings, estimateStructureCount, weightedMember, pointInsideRamp, pointSegmentDistance } from './structure-tool.js';
@@ -432,11 +432,12 @@ class TerrainEditor {
   }
 
 
-  plateauObjectFromControls(id, points) {
+  plateauObjectFromControls(id, points, strokeBreaks = []) {
     const settings = this.plateauSettings();
     return normalizePlateauObject({
       id,
       points: structuredClone(points || []),
+      stroke_breaks: structuredClone(strokeBreaks || []),
       target_height: settings.targetHeight,
       plateau_radius: settings.plateauRadius,
       slope_width: settings.slopeWidth,
@@ -491,13 +492,14 @@ class TerrainEditor {
     if (!selected) { this.clearPlateauSelection(); this.message('No hay una meseta editable bajo ese punto. Las mesetas creadas antes de esta actualización permanecen integradas en la capa.'); return; }
     this.selectedPlateauId = selected.id; this.loadPlateauIntoControls(selected);
     $('plateau-selection-actions').hidden = false;
-    $('plateau-selection-info').textContent = `Meseta seleccionada · ${selected.points.length} punto(s) del trazo.`;
+    const strokeCount = plateauObjectStrokes(selected, minHeight, maxHeight).length;
+    $('plateau-selection-info').textContent = `Meseta seleccionada · ${strokeCount} pasada(s), ${selected.points.length} punto(s).`;
     this.message('Meseta seleccionada. Modifica sus parámetros actuales y pulsa Aplicar cambios.'); this.renderOverlay();
   }
 
   applySelectedPlateauEdit({ silent = false } = {}) {
     const current = this.selectedPlateau(); if (!current) return false;
-    const replacement = this.plateauObjectFromControls(current.id, current.points);
+    const replacement = this.plateauObjectFromControls(current.id, current.points, current.stroke_breaks);
     const comparable = (item) => JSON.stringify({
       target_height: item.target_height,
       plateau_radius: item.plateau_radius,
@@ -535,11 +537,33 @@ class TerrainEditor {
     if (!this.currentChanges?.size) { this.plateauStrokePoints = []; this.plateauStrokeSettings = null; this.plateauObjectsBeforeStroke = null; this.currentChanges = null; this.strokeBaseValues = null; this.strokeInfluence = null; return false; }
     const object = this.plateauObjectFromControls(this.plateauStrokeSettings.id, this.plateauStrokePoints);
     const before = this.plateauObjectsBeforeStroke || structuredClone(this.plateauObjects);
-    this.plateauObjects.push(object); this.selectedPlateauId = object.id; this.regeneratePlateauLayer();
-    this.pushHistory({ type: 'plateauObjects', before, after: structuredClone(this.plateauObjects), selectedId: object.id });
+    const minHeight = Number($('min-height').value); const maxHeight = Number($('max-height').value);
+    const compatibleIndexes = [];
+    for (let index = 0; index < this.plateauObjects.length; index += 1) {
+      if (plateauObjectsCanMerge(this.plateauObjects[index], object, minHeight, maxHeight)) compatibleIndexes.push(index);
+    }
+    let selectedId = object.id;
+    if (compatibleIndexes.length) {
+      const anchorIndex = compatibleIndexes[0];
+      const anchor = this.plateauObjects[anchorIndex];
+      const merged = mergePlateauObjects([
+        anchor,
+        ...compatibleIndexes.slice(1).map((index) => this.plateauObjects[index]),
+        object,
+      ], minHeight, maxHeight);
+      merged.id = anchor.id;
+      const mergedIndexes = new Set(compatibleIndexes);
+      this.plateauObjects = this.plateauObjects.filter((_, index) => !mergedIndexes.has(index));
+      this.plateauObjects.splice(Math.min(anchorIndex, this.plateauObjects.length), 0, merged);
+      selectedId = merged.id;
+    } else {
+      this.plateauObjects.push(object);
+    }
+    this.selectedPlateauId = selectedId; this.regeneratePlateauLayer();
+    this.pushHistory({ type: 'plateauObjects', before, after: structuredClone(this.plateauObjects), selectedId });
     this.plateauStrokePoints = []; this.plateauStrokeSettings = null; this.plateauObjectsBeforeStroke = null;
     this.currentChanges = null; this.strokeBaseValues = null; this.strokeInfluence = null;
-    this.message('Meseta creada como objeto editable. Usa Seleccionar meseta para cambiar sus parámetros.');
+    this.message(compatibleIndexes.length ? 'La nueva pasada se unió a la meseta existente.' : 'Meseta creada como objeto editable. Usa Seleccionar meseta para cambiar sus parámetros.');
     return true;
   }
 
@@ -1877,10 +1901,13 @@ class TerrainEditor {
       minHeight: $('min-height').value,
       maxHeight: $('max-height').value,
     });
+    const strokes = plateauObjectStrokes(object, Number($('min-height').value), Number($('max-height').value));
     const trace = () => {
       ctx.beginPath();
-      if (object.points.length === 1) ctx.arc(object.points[0].x, object.points[0].z, 0.01, 0, Math.PI * 2);
-      else { ctx.moveTo(object.points[0].x, object.points[0].z); for (const point of object.points.slice(1)) ctx.lineTo(point.x, point.z); }
+      for (const stroke of strokes) {
+        if (stroke.length === 1) ctx.arc(stroke[0].x, stroke[0].z, 0.01, 0, Math.PI * 2);
+        else { ctx.moveTo(stroke[0].x, stroke[0].z); for (const point of stroke.slice(1)) ctx.lineTo(point.x, point.z); }
+      }
     };
     ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
     if (settings.supportEnabled) { ctx.strokeStyle = '#66df8b55'; ctx.lineWidth = settings.radius * 2; trace(); ctx.stroke(); }

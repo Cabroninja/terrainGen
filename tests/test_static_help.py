@@ -236,3 +236,18 @@ def test_reference_image_editor_is_present_and_saved_only_in_project():
     assert "this.projectDocument(false)" in javascript
     assert "beginReferenceDrag" in javascript
     assert "#reference-canvas" in styles
+
+def test_results_splitters_resize_without_restoring_stale_sizes():
+    root = Path(__file__).parents[1] / "app" / "static"
+    shell = (root / "ui-shell.js").read_text(encoding="utf-8")
+    styles = (root / "styles.css").read_text(encoding="utf-8")
+    assert shell.count("window.addEventListener('pointermove', moveDrag)") == 2
+    assert shell.count("window.addEventListener('blur', finishDrag)") == 2
+    assert shell.count("if (!drag) {") >= 2
+    assert "window.innerWidth - 520" not in shell
+    drawer_move = shell.split("function bindResultsDrawerSize()", 1)[1].split("splitter.addEventListener('keydown'", 1)[0]
+    assert "notifyViewportResize();" not in drawer_move.split("const moveDrag", 1)[1]
+    assert "max-width: calc(100vw - clamp(300px, 32vw, 420px));" in styles
+    assert "minmax(120px, var(--ui-validation-width))" in styles
+    assert "minmax(180px, 1fr)" in styles
+
