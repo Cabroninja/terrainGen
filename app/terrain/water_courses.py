@@ -393,32 +393,67 @@ def _apply_automatic_waterfalls(
     pool_cells = 0
     support_cells = 0
     heights: list[float] = []
+    recesses: list[float] = []
+    previous_waterfall_progress = 0.0
 
     for number, event in enumerate(plan.waterfalls, start=1):
         drop = max(0.0, event.high_surface - event.low_surface)
         if drop < 1.5:
             continue
         point, direction = _point_and_direction_at_progress(plan.points, plan.cumulative, event.progress)
-        curtain_half_length = max(0.55, min(1.25, float(course.width) * 0.10))
-        curtain = (
-            (np.abs(progress - event.progress) <= curtain_half_length)
-            & (distance <= half_width + 1e-6)
-        )
-        blocked = curtain & road_slice & (course.road_policy != "cut")
-        active = curtain & ~blocked
+
+        # cascade_incline_ratio == 0 preserves the exact vertical behaviour used
+        # before v5.3.2. Positive 1:X values turn the narrow vertical curtain into
+        # a short, steep chute recessed into the plateau. A lower X excavates
+        # farther upstream; it never changes the ordinary river profile.
+        incline_ratio = max(0.0, float(course.cascade_incline_ratio))
+        available_upstream = max(0.0, float(event.progress) - previous_waterfall_progress - 1.0)
+        requested_recess = drop / incline_ratio if incline_ratio > 1e-6 else 0.0
+        recess = min(requested_recess, available_upstream, 32.0)
+        if recess < 0.75:
+            recess = 0.0
+
+        if recess <= 0.0:
+            curtain_half_length = max(0.55, min(1.25, float(course.width) * 0.10))
+            waterfall_zone = (
+                (np.abs(progress - event.progress) <= curtain_half_length)
+                & (distance <= half_width + 1e-6)
+            )
+            waterfall_surface = np.full(progress.shape, event.high_surface, dtype=np.float32)
+        else:
+            waterfall_zone = (
+                (progress >= event.progress - recess - 0.25)
+                & (progress <= event.progress + 0.35)
+                & (distance <= half_width + 1e-6)
+            )
+            upstream_fraction = np.clip((event.progress - progress) / max(recess, 1e-6), 0.0, 1.0)
+            waterfall_surface = (
+                event.low_surface + drop * _smoothstep(upstream_fraction)
+            ).astype(np.float32)
+
+        blocked = waterfall_zone & road_slice & (course.road_policy != "cut")
+        active = waterfall_zone & ~blocked
         if not np.any(active):
             issues.append({
                 "severity": "warning",
                 "code": "waterfall_blocked",
                 "message": f"La cascada {number} de «{course.label or course.id}» quedó bloqueada por un camino protegido.",
             })
+            previous_waterfall_progress = float(event.progress)
             continue
 
-        # One narrow column stores the complete vertical drop. The exporter emits
-        # a source block only at the top and falling water below it.
-        terrain_slice[active] = event.low_surface - float(course.depth)
+        if recess <= 0.0:
+            # Current selectable behaviour: one narrow column stores the complete
+            # vertical drop. The exporter emits a source only at the top.
+            terrain_slice[active] = event.low_surface - float(course.depth)
+            local_surface[active] = int(round(event.high_surface))
+        else:
+            # Inclined cascade: excavate a constant-depth stepped chute into the
+            # plateau. Each column follows the steep 1:X profile and is exported
+            # as falling water below its source block.
+            terrain_slice[active] = waterfall_surface[active] - float(course.depth)
+            local_surface[active] = np.rint(waterfall_surface[active]).astype(np.int16)
         local_mask[active] = 1
-        local_surface[active] = int(round(event.high_surface))
         local_fall[active] = 1
         if course.road_policy == "cut":
             local_cut[active & road_slice] = 1
@@ -433,33 +468,60 @@ def _apply_automatic_waterfalls(
         lateral_signed = -dx * float(direction[1]) + dz * float(direction[0])
         lateral_abs = np.abs(lateral_signed)
 
-        alcove_up = max(1.8, min(5.5, half_width + 1.2))
         alcove_down = max(2.4, min(7.5, half_width + drop * 0.10 + 2.0))
         alcove_width = max(half_width + 2.4, half_width + float(course.shore_width) * 0.7 + min(4.0, drop * 0.10 + 1.4))
-        long_norm = np.where(longitudinal < 0.0, longitudinal / alcove_up, longitudinal / alcove_down)
-        side_norm = lateral_signed / alcove_width
-        alcove = (long_norm ** 2 + side_norm ** 2 <= 1.0) & ~active & ~road_slice
-        depth_bias = np.clip((longitudinal + alcove_up) / (alcove_up + alcove_down), 0.0, 1.0)
-        side_bias = np.clip(1.0 - lateral_abs / alcove_width, 0.0, 1.0)
-        alcove_ratio = np.clip(0.18 + 0.72 * depth_bias * (0.60 + 0.40 * side_bias), 0.0, 1.0)
-        alcove_target = event.low_surface + drop * alcove_ratio
+
+        if recess <= 0.0:
+            # Preserve the v5.3.1 alcove exactly for the selectable Vertical mode.
+            alcove_up = max(1.8, min(5.5, half_width + 1.2))
+            long_norm = np.where(longitudinal < 0.0, longitudinal / alcove_up, longitudinal / alcove_down)
+            side_norm = lateral_signed / alcove_width
+            alcove = (long_norm ** 2 + side_norm ** 2 <= 1.0) & ~active & ~road_slice
+            depth_bias = np.clip((longitudinal + alcove_up) / (alcove_up + alcove_down), 0.0, 1.0)
+            side_bias = np.clip(1.0 - lateral_abs / alcove_width, 0.0, 1.0)
+            alcove_ratio = np.clip(0.18 + 0.72 * depth_bias * (0.60 + 0.40 * side_bias), 0.0, 1.0)
+            alcove_target = event.low_surface + drop * alcove_ratio
+        else:
+            # Extend the eroded recess upstream with the inclined chute. The wall
+            # height follows the same 1:X profile, then rises organically toward
+            # the outer edge instead of forming a cylindrical shell.
+            alcove_up = recess + max(1.8, min(5.5, half_width + 1.2))
+            long_norm = np.where(longitudinal < 0.0, longitudinal / alcove_up, longitudinal / alcove_down)
+            side_norm = lateral_signed / alcove_width
+            alcove = (long_norm ** 2 + side_norm ** 2 <= 1.0) & ~active & ~road_slice
+            chute_fraction = np.clip(-longitudinal / max(recess, 1e-6), 0.0, 1.0)
+            center_surface = event.low_surface + drop * _smoothstep(chute_fraction)
+            center_surface = np.where(longitudinal < -recess, event.high_surface, center_surface)
+            center_surface = np.where(longitudinal > 0.0, event.low_surface, center_surface)
+            edge_fraction = np.clip(lateral_abs / max(alcove_width, 1e-6), 0.0, 1.0)
+            rocky_lift = np.minimum(drop * 0.42, 1.5 + edge_fraction * (2.5 + drop * 0.18))
+            alcove_target = center_surface + rocky_lift
+
         carve = alcove & (terrain_slice > alcove_target)
         terrain_slice[carve] = alcove_target[carve]
         local_shore[carve] = 1
 
         support_front = max(1.8, half_width * 0.35 + 1.0)
         support_outer = half_width + 1.5
+        support_back = recess + 0.8 if recess > 0.0 else 0.8
         support = (
             (lateral_abs > half_width)
             & (lateral_abs <= support_outer)
-            & (longitudinal >= -0.8)
+            & (longitudinal >= -support_back)
             & (longitudinal <= support_front)
             & ~road_slice
         )
         lateral_ratio = np.clip((support_outer - lateral_abs) / max(1e-6, support_outer - half_width), 0.0, 1.0)
-        front_ratio = np.clip(1.0 - np.maximum(longitudinal, 0.0) / max(1e-6, support_front), 0.0, 1.0)
-        support_ratio = np.clip(0.30 + 0.45 * lateral_ratio * front_ratio, 0.0, 0.82)
-        support_target = event.low_surface + drop * support_ratio
+        if recess <= 0.0:
+            front_ratio = np.clip(1.0 - np.maximum(longitudinal, 0.0) / max(1e-6, support_front), 0.0, 1.0)
+            support_ratio = np.clip(0.30 + 0.45 * lateral_ratio * front_ratio, 0.0, 0.82)
+            support_target = event.low_surface + drop * support_ratio
+        else:
+            chute_fraction = np.clip(-longitudinal / max(recess, 1e-6), 0.0, 1.0)
+            bank_surface = event.low_surface + drop * _smoothstep(chute_fraction)
+            bank_surface = np.where(longitudinal < -recess, event.high_surface, bank_surface)
+            bank_surface = np.where(longitudinal > 0.0, event.low_surface, bank_surface)
+            support_target = bank_surface + 0.35 + lateral_ratio * 0.65
         support_fill = support & (terrain_slice < support_target)
         terrain_slice[support_fill] = support_target[support_fill]
         local_shore[support_fill] = 1
@@ -519,6 +581,8 @@ def _apply_automatic_waterfalls(
         curtain_cells += int(active.sum())
         pool_cells += int(new_pool.sum())
         heights.append(round(drop, 2))
+        recesses.append(round(recess, 2))
+        previous_waterfall_progress = float(event.progress)
 
     return {
         "detected": len(plan.waterfalls),
@@ -527,6 +591,8 @@ def _apply_automatic_waterfalls(
         "pool_cells": pool_cells,
         "support_cells": support_cells,
         "heights": heights,
+        "recesses": recesses,
+        "incline_ratio": float(course.cascade_incline_ratio),
     }
 
 
@@ -743,6 +809,8 @@ def apply_water_system(
             "plunge_pool_cells": waterfall_summary["pool_cells"],
             "cascade_support_cells": waterfall_summary["support_cells"],
             "waterfall_heights": waterfall_summary["heights"],
+            "waterfall_recesses": waterfall_summary["recesses"],
+            "cascade_incline_ratio": waterfall_summary["incline_ratio"],
             "maximum_excavation": round(maximum_cut, 3),
             "maximum_fill": round(maximum_fill, 3),
             "smoothing": course.smoothing,

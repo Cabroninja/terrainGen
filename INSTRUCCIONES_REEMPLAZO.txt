@@ -1,18 +1,9 @@
-JKR Terrain Generator v5.3.0 — Río automático
+Parche v5.3.2 — Inclinación de cascadas
 
-Este ZIP no contiene una carpeta contenedora adicional.
-Descomprímelo desde la raíz del proyecto:
+El ZIP no contiene una carpeta exterior adicional.
+Descomprime directamente en la raíz del proyecto:
 
-  unzip -o JKR-Terrain-Generator-v5.3.0-RIO-AUTOMATICO-PARCHE.zip
-  docker compose up -d --build
+unzip -o JKR-Terrain-Generator-v5.3.2-INCLINACION-CASCADA-PARCHE.zip
+docker compose up -d --build
 
-Después recarga el navegador con Ctrl + F5.
-
-Archivos reemplazados:
-- app/core/models.py
-- app/terrain/water_courses.py
-- app/static/app.js
-- app/static/config-help.json
-- app/static/index.html
-- app/static/water-course-tool.js
-- tests/test_water_courses.py
+Luego recarga el navegador con Ctrl + F5.

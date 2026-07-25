@@ -111,6 +111,7 @@ class WaterCourse(BaseModel):
     shore_profile: Literal["compact", "natural", "smooth"] = "natural"
     road_policy: Literal["protect", "ford", "cut"] = "protect"
     river_style: Literal["calm", "natural", "mountain"] = "natural"
+    cascade_incline_ratio: float = Field(default=0.0, ge=0.0, le=12.0)
     # Campos heredados de las versiones 5.1–5.2.5. Se conservan únicamente
     # para abrir proyectos antiguos; el generador automático ya no los usa.
     relief_mode: Literal["downhill", "follow"] = "downhill"

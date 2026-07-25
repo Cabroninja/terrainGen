@@ -1261,5 +1261,14 @@
     "low": "Tranquilo: cauces más suaves, pozas amplias y cascadas menos frecuentes.",
     "high": "Montañoso: acepta más cascadas, gargantas compactas y cambios verticales más marcados.",
     "rule": "Natural es el valor recomendado para la mayoría de los mapas tipo Albion."
+  },
+  "water_cascade_incline": {
+    "label": "Inclinación de cascada",
+    "category": "Río automático",
+    "technical": "Controla el retroceso horizontal de la caída automática dentro de la meseta. El valor se expresa como 1:X: por cada X bloques verticales, la garganta se introduce aproximadamente un bloque en la montaña. La opción Vertical conserva exactamente el comportamiento anterior.",
+    "plain": "Permite que la cascada no caiga en un ángulo tan recto. Los valores bajos excavan más hacia dentro de la meseta; Vertical mantiene la caída actual.",
+    "low": "Vertical o 1:8: caída casi recta y poca excavación hacia el interior.",
+    "high": "1:2: garganta mucho más retraída dentro de la meseta, adecuada cuando quieres una cascada inclinada y profunda.",
+    "rule": "Este parámetro solo modifica la cavidad y la caída de las cascadas. No cambia la pendiente del cauce normal ni el recorrido dibujado."
   }
 }

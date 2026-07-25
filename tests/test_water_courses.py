@@ -68,6 +68,7 @@ def test_old_river_fields_are_accepted_but_automatic_style_defaults_to_natural()
     })
     project = ProjectDocument.model_validate(payload)
     assert project.water_courses[0].river_style == "natural"
+    assert project.water_courses[0].cascade_incline_ratio == 0.0
     terrain = compile_project(project)
     summary = terrain.validation["water_system"]["items"][0]
     assert summary["river_style"] == "natural"
@@ -106,10 +107,48 @@ def test_waterfall_alcove_blends_side_walls_instead_of_a_clean_cylindrical_shell
     local_height = terrain.height[22:44, 34:46]
     local_water = terrain.water_mask[22:44, 34:46] > 0
     dry = local_height[~local_water]
-    # The side walls around the waterfall should contain intermediate rocky
-    # heights. A perfectly cylindrical shell would leave most dry cells either
-    # at the plateau top (120) or the lower plain (70).
-    assert np.any((dry > 76) & (dry < 118))
+    # The compiler maps painted height values into the configured vertical
+    # range. The alcove must still contain heights between the local low and high
+    # extremes instead of only two clean cylindrical levels.
+    low = int(dry.min())
+    high = int(dry.max())
+    assert high - low >= 4
+    assert np.any((dry > low + 1) & (dry < high - 1))
+
+def test_vertical_cascade_option_preserves_previous_narrow_fall():
+    payload = _cliff_payload()
+    payload["water_courses"][0]["cascade_incline_ratio"] = 0
+    terrain = compile_project(ProjectDocument.model_validate(payload))
+    summary = terrain.validation["water_system"]["items"][0]
+    center_x = np.where(terrain.water_fall_mask[32] > 0)[0]
+    assert summary["cascade_incline_ratio"] == 0
+    assert summary["waterfall_recesses"] == [0.0]
+    assert center_x.size == 1
+
+
+def test_lower_cascade_ratio_excavates_farther_into_the_plateau():
+    shallow_payload = _cliff_payload()
+    shallow_payload["water_courses"][0]["cascade_incline_ratio"] = 8
+    deep_payload = _cliff_payload()
+    deep_payload["water_courses"][0]["cascade_incline_ratio"] = 2
+
+    shallow = compile_project(ProjectDocument.model_validate(shallow_payload))
+    deep = compile_project(ProjectDocument.model_validate(deep_payload))
+    shallow_summary = shallow.validation["water_system"]["items"][0]
+    deep_summary = deep.validation["water_system"]["items"][0]
+    shallow_x = np.where(shallow.water_fall_mask[32] > 0)[0]
+    deep_x = np.where(deep.water_fall_mask[32] > 0)[0]
+
+    assert shallow_summary["cascade_incline_ratio"] == 8
+    assert deep_summary["cascade_incline_ratio"] == 2
+    assert deep_summary["waterfall_recesses"][0] > shallow_summary["waterfall_recesses"][0]
+    assert np.ptp(deep_x) > np.ptp(shallow_x)
+    # The inclined fall must retain several descending water levels inside the
+    # cliff rather than moving the entire river into a long ordinary ramp.
+    deep_levels = deep.water_surface[32, deep_x]
+    assert np.unique(deep_levels).size >= 4
+    assert np.all(deep.water_fall_mask[32, deep_x] > 0)
+
 
 
 def test_waterfall_column_uses_falling_water_and_normal_channel_keeps_bounded_depth():
@@ -289,3 +328,4 @@ def test_styles_change_automatic_character_without_exposing_slope_controls():
     assert calm_summary["cascades_detected"] >= 1
     assert natural_summary["cascades_detected"] >= 1
     assert mountain_summary["cascades_detected"] >= 1
+

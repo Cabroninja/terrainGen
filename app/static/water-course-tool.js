@@ -10,6 +10,7 @@ export function normalizeWaterSettings(input = {}) {
     shoreProfile: ['compact', 'natural', 'smooth'].includes(input.shoreProfile) ? input.shoreProfile : 'natural',
     roadPolicy: ['protect', 'ford', 'cut'].includes(input.roadPolicy) ? input.roadPolicy : 'protect',
     riverStyle: ['calm', 'natural', 'mountain'].includes(input.riverStyle) ? input.riverStyle : 'natural',
+    cascadeInclineRatio: clamp(input.cascadeInclineRatio, 0, 12),
     smoothing: Math.round(clamp(input.smoothing, 0, 100)),
     exitEnabled: Boolean(input.exitEnabled),
   };
