@@ -5,10 +5,10 @@
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1" name="viewport"/>
 <meta content="#1b1d1f" name="theme-color"/>
-<title>JKR Terrain Generator v5.5.0</title>
+<title>JKR Terrain Generator v5.6.3</title>
 <link href="/styles.css" rel="stylesheet"/>
 </head>
-<body><div class="app-shell"><header class="topbar"><div class="brand-block"><button class="brand-button" data-tooltip="Abre la configuración general del proyecto." data-ui-action="project" type="button"><span class="brand-title">JKR Terrain</span><span class="brand-version">v5.5.0</span></button><span class="badge" id="dirty-badge">Sin guardar</span></div><nav aria-label="Acciones del proyecto" class="top-actions"><button data-tooltip="Crea un proyecto nuevo con la configuración inicial." id="new-project">Nuevo</button><label class="button-like" data-tooltip="Abre un proyecto .jkrterrain.json guardado anteriormente.">Abrir<input accept=".json,.jkrterrain.json,application/json" hidden="" id="load-project" type="file"/></label><button data-tooltip="Guarda el proyecto editable con todas sus capas y objetos." id="save-project">Guardar</button><span aria-hidden="true" class="toolbar-separator"></span><button class="accent" data-tooltip="Compila el terreno y actualiza validación, imágenes y vistas 3D." id="compile-preview">Compilar</button><button class="accent-strong" data-tooltip="Compila y genera el archivo schematic listo para Minecraft." id="export-schematic">Exportar .schem</button></nav><div class="view-actions"><button aria-pressed="false" class="view-toggle" data-tooltip="Muestra u oculta la configuración general del mapa." data-ui-action="project" type="button">Proyecto</button><button aria-pressed="false" class="view-toggle" data-tooltip="Muestra u oculta Capas, Herramientas, Entorno y Compilación." data-ui-action="inspector" type="button">Inspector</button><button aria-pressed="false" class="view-toggle" data-tooltip="Muestra u oculta validación, vistas compiladas y descargas." data-ui-action="results" type="button">Resultados</button></div></header><main class="workspace"><section class="editor-area">
+<body><div class="app-shell"><header class="topbar"><div class="brand-block"><button class="brand-button" data-tooltip="Abre la configuración general del proyecto." data-ui-action="project" type="button"><span class="brand-title">JKR Terrain</span><span class="brand-version">v5.6.3</span></button><span class="badge" id="dirty-badge">Sin guardar</span></div><nav aria-label="Acciones del proyecto" class="top-actions"><button data-tooltip="Crea un proyecto nuevo con la configuración inicial." id="new-project">Nuevo</button><label class="button-like" data-tooltip="Abre un proyecto .jkrterrain.json guardado anteriormente.">Abrir<input accept=".json,.jkrterrain.json,application/json" hidden="" id="load-project" type="file"/></label><button data-tooltip="Guarda el proyecto editable con todas sus capas y objetos." id="save-project">Guardar</button><span aria-hidden="true" class="toolbar-separator"></span><button class="accent" data-tooltip="Compila el terreno y actualiza validación, imágenes y vistas 3D." id="compile-preview">Compilar</button><button class="accent-strong" data-tooltip="Compila y genera el archivo schematic listo para Minecraft." id="export-schematic">Exportar .schem</button></nav><div class="view-actions"><button aria-pressed="false" class="view-toggle" data-tooltip="Muestra u oculta la configuración general del mapa." data-ui-action="project" type="button">Proyecto</button><button aria-pressed="false" class="view-toggle" data-tooltip="Muestra u oculta Capas, Herramientas, Entorno y Compilación." data-ui-action="inspector" type="button">Inspector</button><button aria-pressed="false" class="view-toggle" data-tooltip="Muestra u oculta validación, vistas compiladas y descargas." data-ui-action="results" type="button">Resultados</button></div></header><main class="workspace"><section class="editor-area">
 <div class="editor-toolbar">
 <div class="editor-history-actions">
 <button data-tooltip="Deshace la última modificación. Atajo: Ctrl+Z." id="undo" title="Deshacer (Ctrl+Z)">Deshacer</button>
@@ -187,18 +187,16 @@
 </div>
 </details>
 <div class="brush-profile-info" id="structure-tool-info">Crea una colección e importa al menos un archivo .schem.</div>
-<div class="structure-library">
-<div class="road-ramp-list-heading library-heading"><span>Colecciones y schematics</span><span class="badge ok" data-tooltip="Indica si la biblioteca central de colecciones y schematics está conectada al servidor." id="structure-library-status">Servidor</span></div>
-<div class="structure-create-row">
-<input id="structure-collection-name" maxlength="80" placeholder="Ej.: Bosque de robles"/>
-<select id="structure-collection-category"><option value="tree">Árboles</option><option value="rock">Rocas</option></select>
-<button id="structure-collection-create" type="button">Crear</button>
+<div class="structure-library-compact">
+<div class="road-ramp-list-heading library-heading"><span>Biblioteca de schematics</span><span class="badge ok" data-tooltip="Indica si la biblioteca central está conectada al servidor." id="structure-library-status">Servidor</span></div>
+<div class="structure-active-source">
+<strong id="structure-active-library-title">Sin colección activa</strong>
+<span id="structure-active-library-source">Abre la biblioteca para crear o elegir árboles y rocas.</span>
 </div>
-<div class="button-row structure-import-actions">
-<label class="button-like accent">Importar .schem<input accept=".schem,application/octet-stream" hidden="" id="structure-import-files" multiple="" type="file"/></label>
-<button class="danger-soft" id="structure-delete-collection" type="button">Eliminar colección</button>
+<div class="button-row">
+<button class="accent" id="structure-library-open" type="button">Abrir biblioteca</button>
+<button hidden="" id="structure-use-collection-source" type="button">Usar colección completa</button>
 </div>
-<div class="structure-asset-list" id="structure-asset-list"><div class="empty-list">Selecciona una colección.</div></div>
 <div class="support-note" id="structure-placement-count">0 estructuras colocadas.</div>
 </div>
 </div>
@@ -231,8 +229,8 @@
 <label class="full toggle-row brush-toggle" data-help="stroke_accumulation" id="stroke-accumulation-field"><input id="stroke-accumulation" type="checkbox"/> Acumular intensidad al repasar durante el mismo clic</label>
 <label class="full" data-help="paint_value" id="value-field">Valor<select id="paint-value"></select></label>
 </div>
-<details class="compact-details preset-details"><summary>Presets de herramienta · servidor</summary><div class="full preset-manager">
-<label data-help="brush_presets">Preset de herramienta<input id="brush-preset-name" maxlength="40" placeholder="Ej.: Meseta Y80"/></label>
+<details class="compact-details preset-details"><summary id="brush-preset-summary">Presets de herramienta · servidor</summary><div class="full preset-manager">
+<label data-help="brush_presets"><span id="brush-preset-label">Preset de herramienta</span><input id="brush-preset-name" maxlength="40" placeholder="Ej.: Meseta Y80"/></label>
 <div class="preset-actions"><select id="brush-preset-select"><option value="">Selecciona un preset</option></select><button id="brush-preset-save" type="button">Guardar</button><button id="brush-preset-load" type="button">Cargar</button><button class="danger-soft" id="brush-preset-delete" type="button">Borrar</button></div>
 </div></details>
 
@@ -383,5 +381,71 @@
 </div>
 </div>
 <div class="download-links" id="download-links"></div>
-</section></div></aside><button aria-label="Cerrar panel abierto" class="ui-backdrop" hidden="" id="ui-backdrop" type="button"></button></div><script src="/ui-shell.js" type="module"></script><script src="/app.js" type="module"></script></body>
+</section></div></aside><section aria-labelledby="structure-library-title" aria-modal="true" class="structure-library-modal" hidden="" id="structure-library-modal" role="dialog">
+<div class="structure-library-window">
+<header class="structure-library-header">
+<div><h2 id="structure-library-title">Biblioteca de schematics</h2><p>Organiza árboles y rocas por colección y revisa cada modelo antes de utilizarlo.</p></div>
+<div class="structure-library-header-actions">
+<label class="button-like accent">Importar .schem<input accept=".schem,application/octet-stream" hidden="" id="structure-library-import-files" multiple="" type="file"/></label>
+<button aria-label="Cerrar biblioteca" class="icon-button" id="structure-library-close" type="button">×</button>
+</div>
+</header>
+<div class="structure-library-layout">
+<aside class="structure-library-sidebar">
+<div class="structure-library-section-title">Categorías y colecciones</div>
+<div class="structure-new-collection">
+<input id="structure-library-new-name" maxlength="80" placeholder="Nueva colección"/>
+<select id="structure-library-new-category"><option value="tree">Árboles</option><option value="rock">Rocas</option></select>
+<button id="structure-library-create" type="button">Crear</button>
+</div>
+<div class="structure-collection-tree" id="structure-library-tree"></div>
+<div class="structure-collection-editor">
+<label>Nombre de la colección<input id="structure-library-collection-label" maxlength="80"/></label>
+<label>Categoría<select id="structure-library-collection-category"><option value="tree">Árboles</option><option value="rock">Rocas</option></select></label>
+<div class="button-row"><button id="structure-library-collection-save" type="button">Guardar</button><button class="danger-soft" id="structure-library-collection-delete" type="button">Eliminar</button></div>
+</div>
+</aside>
+<section class="structure-library-browser">
+<div class="structure-library-toolbar">
+<label class="structure-library-search"><span>Buscar</span><input id="structure-library-search" placeholder="Nombre del schematic…" type="search"/></label>
+<div class="structure-library-view-buttons" role="group"><button class="active" data-structure-view="grid" type="button">Cuadrícula</button><button data-structure-view="list" type="button">Lista</button></div>
+<label class="structure-thumbnail-control">Miniaturas<input id="structure-library-thumbnail-size" max="220" min="100" step="10" type="range" value="150"/></label>
+</div>
+<div class="structure-import-dropzone" id="structure-library-dropzone">Arrastra aquí uno o varios archivos .schem</div>
+<div class="structure-library-gallery" id="structure-library-gallery"><div class="empty-list">Selecciona o crea una colección.</div></div>
+</section>
+<aside class="structure-library-preview-panel">
+<div class="structure-library-preview">
+<canvas aria-label="Vista previa 3D del schematic seleccionado" id="structure-library-preview-canvas"></canvas>
+<div class="structure-preview-toolbar">
+<button id="structure-library-preview-reset" type="button">Recentrar</button>
+<label class="check"><input checked="" id="structure-library-preview-grid" type="checkbox"/> Cuadrícula</label>
+<label class="check"><input checked="" id="structure-library-preview-bounds" type="checkbox"/> Caja</label>
+</div>
+<div class="structure-library-preview-status" id="structure-library-preview-status">Selecciona una schematic para verla.</div>
+</div>
+<div class="structure-asset-editor" id="structure-library-asset-editor">
+<label class="full">Nombre<input disabled="" id="structure-library-asset-label" maxlength="80"/></label>
+<div class="structure-asset-metadata" id="structure-library-asset-metadata">Sin selección.</div>
+<div class="structure-asset-fields">
+<label>Peso<input disabled="" id="structure-library-asset-weight" max="10000" min="1" type="number" value="100"/></label>
+<label>Apoyo X<input disabled="" id="structure-library-anchor-x" min="0" type="number" value="0"/></label>
+<label>Apoyo Y<input disabled="" id="structure-library-anchor-y" min="0" type="number" value="0"/></label>
+<label>Apoyo Z<input disabled="" id="structure-library-anchor-z" min="0" type="number" value="0"/></label>
+</div>
+<button disabled="" id="structure-library-asset-save" type="button">Guardar cambios</button>
+</div>
+<div class="structure-library-batch-actions">
+<label>Mover seleccionados<select id="structure-library-move-target"></select></label>
+<div class="button-row"><button disabled="" id="structure-library-move" type="button">Mover</button><button class="danger-soft" disabled="" id="structure-library-delete-assets" type="button">Eliminar</button></div>
+</div>
+</aside>
+</div>
+<footer class="structure-library-footer">
+<span id="structure-library-selection-summary">0 elementos seleccionados</span>
+<span class="structure-library-progress" id="structure-library-progress"></span>
+<div class="structure-library-footer-actions"><button disabled="" id="structure-library-use-collection" type="button">Usar colección</button><button class="accent" disabled="" id="structure-library-use-asset" type="button">Usar schematic</button><button id="structure-library-footer-close" type="button">Cerrar</button></div>
+</footer>
+</div>
+</section><button aria-label="Cerrar panel abierto" class="ui-backdrop" hidden="" id="ui-backdrop" type="button"></button></div><script src="/ui-shell.js" type="module"></script><script src="/app.js" type="module"></script></body>
 </html>

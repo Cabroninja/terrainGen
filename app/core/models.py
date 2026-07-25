@@ -249,6 +249,16 @@ class LibraryCollectionCreate(BaseModel):
     category: Literal["tree", "rock"] = "tree"
 
 
+class LibraryCollectionUpdate(BaseModel):
+    label: str | None = Field(default=None, min_length=1, max_length=80)
+    category: Literal["tree", "rock"] | None = None
+
+
+class LibraryAssetsMove(BaseModel):
+    target_collection_id: str = Field(min_length=1, max_length=120)
+    asset_ids: list[str] = Field(min_length=1, max_length=500)
+
+
 class LibraryMemberUpdate(BaseModel):
     weight: int = Field(default=100, ge=1, le=10_000)
 

@@ -1,8 +1,0 @@
-JKR Terrain Generator v5.5.2 — Unión automática de pasadas de meseta
-
-Desde la raíz del proyecto:
-
-unzip -o JKR-Terrain-Generator-v5.5.2-UNION-PASADAS-MESETA-PARCHE.zip
-docker compose up -d --build
-
-Después recarga el navegador con Ctrl + F5.

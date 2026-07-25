@@ -532,15 +532,15 @@
     "rule": "Transición o falloff = radio total − radio del núcleo."
   },
   "brush_presets": {
-    "label": "Presets de pincel",
+    "label": "Presets por herramienta",
     "category": "Presets",
-    "technical": "Guarda en la biblioteca central del servidor la configuración de mesetas, rampas, agua, estructuras y pinceles de modificador.",
-    "plain": "Guarda una herramienta que te guste y úsala desde cualquier computador conectado a esta instalación.",
+    "technical": "Guarda en la biblioteca central únicamente los parámetros de la herramienta activa. Cada capa, modo y acción usa un ámbito independiente; por ejemplo, Río libre no comparte presets con Masa de agua, mesetas, caminos o estructuras.",
+    "plain": "Solo verás los presets que pertenecen a la herramienta que estás usando en ese momento.",
     "low": "Sin preset seleccionado no se modifica ninguna opción.",
-    "high": "Puedes guardar varios perfiles para mesetas, caminos o retoques.",
+    "high": "Puedes reutilizar el mismo nombre en herramientas distintas porque cada una conserva su propia lista.",
     "minimum": "1 nombre",
     "maximum": "Según espacio disponible en el servidor",
-    "rule": "Los presets son compartidos por todos los navegadores que abren la misma instalación de la aplicación."
+    "rule": "Al cambiar de capa, modo o acción, la lista se actualiza automáticamente y nunca aplica parámetros de otra herramienta."
   },
   "compilation_presets": {
     "label": "Presets de compilación",

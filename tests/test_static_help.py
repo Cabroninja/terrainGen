@@ -251,3 +251,39 @@ def test_results_splitters_resize_without_restoring_stale_sizes():
     assert "minmax(120px, var(--ui-validation-width))" in styles
     assert "minmax(180px, 1fr)" in styles
 
+
+
+def test_visual_schematic_library_manager_is_present():
+    root = Path(__file__).parents[1] / "app" / "static"
+    html = (root / "index.html").read_text(encoding="utf-8")
+    app_js = (root / "app.js").read_text(encoding="utf-8")
+    manager = (root / "structure-library-manager.js").read_text(encoding="utf-8")
+    styles = (root / "styles.css").read_text(encoding="utf-8")
+    for control in (
+        "structure-library-open", "structure-library-modal", "structure-library-tree",
+        "structure-library-gallery", "structure-library-search", "structure-library-import-files",
+        "structure-library-preview-canvas", "structure-library-use-collection",
+        "structure-library-use-asset", "structure-library-move",
+    ):
+        assert f'id="{control}"' in html
+    assert "new StructureLibraryManager(this)" in app_js
+    assert "class SchematicPreviewViewer" in manager
+    assert "drawArraysInstanced" in manager
+    assert "a_top_color" in manager
+    assert "a_accent_color" in manager
+    assert "pixelNoise" in manager
+    assert "data.version !== 2" in manager
+    assert ".structure-library-modal" in styles
+
+
+def test_tool_presets_use_independent_active_scopes():
+    root = Path(__file__).parents[1] / "app" / "static"
+    html = (root / "index.html").read_text(encoding="utf-8")
+    javascript = (root / "app.js").read_text(encoding="utf-8")
+    assert 'id="brush-preset-summary"' in html
+    assert 'id="brush-preset-label"' in html
+    assert "activeBrushPresetContext()" in javascript
+    assert "scope: 'water.river'" in javascript
+    assert "scope: 'height_base.plateau'" in javascript
+    assert "scope: `structures.${mode}`" in javascript
+    assert "?scope=${encodeURIComponent(scope)}" in javascript

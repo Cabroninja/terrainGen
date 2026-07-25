@@ -12,8 +12,8 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.core.models import (
-    CompileRequest, LibraryAssetUpdate, LibraryCollectionCreate,
-    LibraryMemberUpdate, LibraryPresetPayload,
+    CompileRequest, LibraryAssetUpdate, LibraryAssetsMove, LibraryCollectionCreate,
+    LibraryCollectionUpdate, LibraryMemberUpdate, LibraryPresetPayload,
 )
 from app.exporters import read_voxel_chunk, write_preview_images, write_schematic, write_terrain_3d_data, write_voxel_source
 from app.terrain import compile_project
@@ -27,12 +27,12 @@ DATA_DIR = Path(os.getenv("DATA_DIR", BASE_DIR / "data"))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 LIBRARY = LibraryStore(DATA_DIR / "library")
 
-app = FastAPI(title="JKR Terrain Generator", version="5.2.0")
+app = FastAPI(title="JKR Terrain Generator", version="5.6.1")
 
 
 @app.get("/api/health")
 def health() -> dict:
-    return {"status": "ok", "version": "5.2.0", "architecture": "paint-first", "library": "server"}
+    return {"status": "ok", "version": "5.6.1", "architecture": "paint-first", "library": "server"}
 
 
 @app.post("/api/structures/import")
@@ -62,30 +62,30 @@ async def import_structure(file: UploadFile = File(...)) -> dict:
 
 
 @app.get("/api/library/presets/{group}")
-def list_library_presets(group: str) -> dict:
+def list_library_presets(group: str, scope: str | None = None) -> dict:
     try:
-        return {"group": group, "presets": LIBRARY.list_presets(group)}
+        return {"group": group, "scope": scope or "", "presets": LIBRARY.list_presets(group, scope)}
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @app.put("/api/library/presets/{group}/{name}")
-def save_library_preset(group: str, name: str, payload: LibraryPresetPayload) -> dict:
+def save_library_preset(group: str, name: str, payload: LibraryPresetPayload, scope: str | None = None) -> dict:
     try:
-        return LIBRARY.save_preset(group, name, payload.values)
+        return LIBRARY.save_preset(group, name, payload.values, scope)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @app.delete("/api/library/presets/{group}/{name}")
-def delete_library_preset(group: str, name: str) -> dict:
+def delete_library_preset(group: str, name: str, scope: str | None = None) -> dict:
     try:
-        deleted = LIBRARY.delete_preset(group, name)
+        deleted = LIBRARY.delete_preset(group, name, scope)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     if not deleted:
         raise HTTPException(status_code=404, detail="Preset no encontrado")
-    return {"deleted": True, "group": group, "name": name}
+    return {"deleted": True, "group": group, "scope": scope or "", "name": name}
 
 
 @app.get("/api/library/structures")
@@ -97,6 +97,26 @@ def get_structure_library() -> dict:
 def create_library_collection(payload: LibraryCollectionCreate) -> dict:
     try:
         return LIBRARY.create_collection(payload.label, payload.category)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.patch("/api/library/structures/collections/{collection_id}")
+def update_library_collection(collection_id: str, payload: LibraryCollectionUpdate) -> dict:
+    try:
+        return LIBRARY.update_collection(collection_id, payload.model_dump(exclude_none=True))
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc).strip("'")) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.post("/api/library/structures/collections/{collection_id}/move-assets")
+def move_library_assets(collection_id: str, payload: LibraryAssetsMove) -> dict:
+    try:
+        return LIBRARY.move_assets(collection_id, payload.target_collection_id, payload.asset_ids)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc).strip("'")) from exc
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
@@ -130,6 +150,27 @@ def update_library_member(collection_id: str, asset_id: str, payload: LibraryMem
         return LIBRARY.update_member(collection_id, asset_id, payload.weight)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc).strip("'")) from exc
+
+
+@app.get("/api/library/structures/assets/{asset_id}/thumbnail")
+def get_library_asset_thumbnail(asset_id: str):
+    try:
+        path = LIBRARY.asset_thumbnail(asset_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc).strip("'")) from exc
+    except (FileNotFoundError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return FileResponse(path, media_type="image/png", filename=None)
+
+
+@app.get("/api/library/structures/assets/{asset_id}/preview")
+def get_library_asset_preview(asset_id: str) -> dict:
+    try:
+        return LIBRARY.asset_preview(asset_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc).strip("'")) from exc
+    except (FileNotFoundError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @app.patch("/api/library/structures/assets/{asset_id}")
