@@ -154,9 +154,14 @@ def _validation(
             "corridor_cells": int((corridor_mask > 0).sum()),
         },
         "road_ramps": {
-            "count": len(road_ramp_summaries),
-            "valid": sum(1 for item in road_ramp_summaries if item["valid"]),
-            "items": road_ramp_summaries,
+            "count": sum(1 for item in road_ramp_summaries if item.get("kind", "road") == "road"),
+            "valid": sum(1 for item in road_ramp_summaries if item.get("kind", "road") == "road" and item["valid"]),
+            "items": [item for item in road_ramp_summaries if item.get("kind", "road") == "road"],
+        },
+        "terrain_ramps": {
+            "count": sum(1 for item in road_ramp_summaries if item.get("kind") == "terrain"),
+            "valid": sum(1 for item in road_ramp_summaries if item.get("kind") == "terrain" and item["valid"]),
+            "items": [item for item in road_ramp_summaries if item.get("kind") == "terrain"],
         },
         "water_system": {
             "course_count": len(water_summaries),
@@ -186,8 +191,8 @@ def compile_project(project: ProjectDocument) -> CompiledTerrain:
     modifier = ((layers["height_modifier"].astype(np.float32) - 128.0) / 127.0) * config.height_modifier_range
     height = np.clip(base + modifier, config.min_height, config.max_height).astype(np.float32)
 
-    # Las rampas son objetos explícitos. Solo ellas modifican el relieve vial y
-    # quedan estrictamente recortadas a su corredor central + transición lateral.
+    # Las rampas son objetos explícitos y acotados. Las viales también pintan
+    # camino; las de meseta solo modifican el relieve dentro de su corredor.
     ramp_result = apply_road_ramps(height, painted_roads, project.road_ramps)
     height = ramp_result.height
     roads = ramp_result.road_mask

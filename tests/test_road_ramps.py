@@ -106,3 +106,21 @@ def test_old_ramps_default_to_side_smoothing_disabled():
     ramp = project.road_ramps[0]
     assert ramp.smooth_sides is False
     assert ramp.follow_terrain is True
+
+
+def test_terrain_ramp_changes_height_without_painting_a_road():
+    payload, _ = _ramp_payload()
+    payload["road_ramps"][0]["kind"] = "terrain"
+    project = ProjectDocument.model_validate(payload)
+    terrain = compile_project(project)
+    assert np.any(np.diff(terrain.height[32, 8:57]) > 0)
+    assert np.all(terrain.road_mask == 0)
+    assert terrain.validation["road_ramps"]["count"] == 0
+    assert terrain.validation["terrain_ramps"]["count"] == 1
+    assert terrain.validation["terrain_ramps"]["valid"] == 1
+
+
+def test_legacy_ramps_default_to_road_kind():
+    payload, _ = _ramp_payload()
+    project = ProjectDocument.model_validate(payload)
+    assert project.road_ramps[0].kind == "road"

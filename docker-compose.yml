@@ -1,13 +1,16 @@
 services:
   terrain-generator:
     build: .
-    container_name: jkr-terrain-generator-v2
+    container_name: jkr-terrain-generator-v5
     restart: unless-stopped
     ports:
       - "8080:8000"
     environment:
       OUTPUT_DIR: /app/output
+      DATA_DIR: /app/data
     volumes:
       - terrain_outputs:/app/output
+      - terrain_data:/app/data
 volumes:
   terrain_outputs:
+  terrain_data:

@@ -151,8 +151,10 @@ def test_height_base_tool_hides_the_advanced_brush_panel():
     javascript = (root / "app.js").read_text(encoding="utf-8")
     assert 'id="plateau-tool-panel"' in html
     assert 'id="standard-brush-panel"' in html
-    assert "$('plateau-tool-panel').hidden = !plateauMode" in javascript
-    assert "$('standard-brush-panel').hidden = plateauMode" in javascript
+    assert "$('plateau-tool-panel').hidden = !plateauLayer" in javascript
+    assert "$('plateau-brush-fields').hidden = !plateauBrushMode" in javascript
+    assert "$('standard-brush-panel').hidden = plateauLayer || rampMode || waterLayer || structureLayer" in javascript
+    assert "$('plateau-tool-mode').value === 'ramp'" in javascript
     assert "const heightLayer = kind === 'modifier'" in javascript
 
 

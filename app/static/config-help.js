@@ -1,6 +1,4 @@
 const TOOLTIP_ID = 'rich-config-tooltip';
-const SHOW_DELAY = 360;
-const QUICK_DELAY = 90;
 
 function section(title, text, className = '') {
   if (text === undefined || text === null || String(text).trim() === '') return null;
@@ -29,6 +27,7 @@ function getTooltip() {
 
 function simpleDefinition(element, text) {
   const label = element.getAttribute('aria-label')
+    || element.childNodes[0]?.textContent?.trim()
     || element.textContent?.trim()
     || element.getAttribute('placeholder')
     || 'Ayuda';
@@ -44,26 +43,11 @@ export async function initializeHelp() {
   const definitions = await fetch('/config-help.json', { cache: 'no-store' }).then((response) => response.json());
   const tooltip = getTooltip();
   let active = null;
-  let showTimer = null;
-  let hideTimer = null;
-  let recentlyShown = false;
-
-  const clearTimers = () => {
-    clearTimeout(showTimer);
-    clearTimeout(hideTimer);
-  };
 
   const hide = () => {
-    clearTimers();
     tooltip.hidden = true;
     active?.setAttribute?.('aria-expanded', 'false');
     active = null;
-    setTimeout(() => { recentlyShown = false; }, 500);
-  };
-
-  const scheduleHide = () => {
-    clearTimeout(hideTimer);
-    hideTimer = setTimeout(hide, 150);
   };
 
   const position = (anchor) => {
@@ -106,11 +90,10 @@ export async function initializeHelp() {
       return;
     }
 
-    const blocks = [
+    [
       section('Explicación técnica', definition.technical),
       section('En palabras simples', definition.plain, 'simple'),
-    ].filter(Boolean);
-    blocks.forEach((block) => tooltip.append(block));
+    ].filter(Boolean).forEach((block) => tooltip.append(block));
 
     const values = [
       ['Mínimo', definition.minimum],
@@ -139,39 +122,32 @@ export async function initializeHelp() {
   };
 
   const showNow = (anchor, definition) => {
-    clearTimers();
     active?.setAttribute?.('aria-expanded', 'false');
     active = anchor;
     renderDefinition(definition);
     tooltip.hidden = false;
     anchor.setAttribute?.('aria-expanded', 'true');
     position(anchor);
-    recentlyShown = true;
   };
 
-  const scheduleShow = (anchor, definition, immediate = false) => {
-    clearTimeout(showTimer);
-    clearTimeout(hideTimer);
-    const delay = immediate ? 0 : recentlyShown ? QUICK_DELAY : SHOW_DELAY;
-    showTimer = setTimeout(() => showNow(anchor, definition), delay);
-  };
+  const bindTrigger = (trigger, definition, anchor = trigger) => {
+    if (!trigger || !definition || trigger.dataset.tooltipTriggerBound === 'true') return false;
+    trigger.dataset.tooltipTriggerBound = 'true';
+    trigger.setAttribute('aria-controls', TOOLTIP_ID);
+    trigger.setAttribute('aria-expanded', 'false');
+    trigger.setAttribute('aria-describedby', TOOLTIP_ID);
 
-  const bindTarget = (target, definition, { click = false, anchor = target } = {}) => {
-    if (!target || !definition || target.dataset.tooltipTargetBound === 'true') return false;
-    target.dataset.tooltipTargetBound = 'true';
-    target.setAttribute('aria-describedby', TOOLTIP_ID);
-    target.addEventListener('mouseenter', () => scheduleShow(anchor, definition));
-    target.addEventListener('mouseleave', scheduleHide);
-    target.addEventListener('focus', () => scheduleShow(anchor, definition, true));
-    target.addEventListener('blur', scheduleHide);
-    if (click) {
-      target.addEventListener('click', (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        if (!tooltip.hidden && active === anchor) hide();
-        else showNow(anchor, definition);
-      });
-    }
+    const toggle = (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (!tooltip.hidden && active === anchor) hide();
+      else showNow(anchor, definition);
+    };
+
+    trigger.addEventListener('click', toggle);
+    trigger.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') toggle(event);
+    });
     return true;
   };
 
@@ -182,8 +158,7 @@ export async function initializeHelp() {
     if (button.tagName === 'BUTTON') button.type = 'button';
     if (button.classList.contains('help-button')) button.textContent = 'i';
     button.setAttribute('aria-label', `Ayuda sobre ${definition.label}`);
-    button.setAttribute('aria-expanded', 'false');
-    bindTarget(button, definition, { click: true });
+    bindTrigger(button, definition);
     return true;
   };
 
@@ -209,29 +184,42 @@ export async function initializeHelp() {
       row.append(title, button);
       label.prepend(row);
       attach(button, definition);
-      bindTarget(title, definition, { anchor: row });
+    } else {
+      const button = row.querySelector('.help-button');
+      if (button) attach(button, definition);
     }
+  };
 
-    bindTarget(label, definition, { anchor: row });
-    label.querySelectorAll('input, select, textarea').forEach((control) => bindTarget(control, definition, { anchor: row }));
+  const createInlineTrigger = (element, definition) => {
+    if (!element || element.dataset.simpleTooltipBound === 'true' || element.classList?.contains('help-button')) return;
+    element.dataset.simpleTooltipBound = 'true';
+    element.removeAttribute('title');
+
+    const trigger = document.createElement('span');
+    trigger.className = 'inline-help-trigger';
+    trigger.textContent = 'i';
+    trigger.setAttribute('role', 'button');
+    trigger.setAttribute('tabindex', '0');
+    trigger.setAttribute('aria-label', `Ayuda sobre ${definition.label}`);
+
+    const dynamicTextButtons = new Set([
+      'compile-preview', 'export-schematic', 'terrain-3d-expand', 'voxel-3d-expand',
+    ]);
+    if (['INPUT', 'SELECT', 'TEXTAREA'].includes(element.tagName) || dynamicTextButtons.has(element.id)) {
+      trigger.classList.add('inline-help-trigger--sibling');
+      element.insertAdjacentElement('afterend', trigger);
+    } else {
+      element.classList.add('has-inline-help');
+      element.append(trigger);
+    }
+    bindTrigger(trigger, definition);
   };
 
   const bindSimpleElement = (element) => {
     if (!element || element.dataset.simpleTooltipBound === 'true' || element.classList?.contains('help-button')) return;
-    const explicit = element.dataset.tooltip || element.getAttribute('title');
-    let text = explicit;
-    if (!text && element.tagName === 'BUTTON') {
-      const name = element.getAttribute('aria-label') || element.textContent?.trim();
-      if (name) text = `Ejecuta la acción «${name}».`;
-    }
-    if (!text && ['INPUT', 'SELECT', 'TEXTAREA'].includes(element.tagName) && !element.closest('label[data-help]')) {
-      const name = element.getAttribute('aria-label') || element.getAttribute('placeholder') || element.id.replaceAll('-', ' ');
-      text = element.tagName === 'SELECT' ? `Selecciona una opción para ${name}.` : `Introduce o modifica ${name}.`;
-    }
+    const text = element.dataset.tooltip || element.getAttribute('title');
     if (!text) return;
-    element.dataset.simpleTooltipBound = 'true';
-    element.removeAttribute('title');
-    bindTarget(element, simpleDefinition(element, text));
+    createInlineTrigger(element, simpleDefinition(element, text));
   };
 
   const scan = (root = document) => {
@@ -241,7 +229,7 @@ export async function initializeHelp() {
     if (root.matches?.('button[data-help-only]')) attach(root, definitions[root.dataset.helpOnly]);
     root.querySelectorAll?.('button[data-help-only]').forEach((button) => attach(button, definitions[button.dataset.helpOnly]));
 
-    const simpleSelector = '[data-tooltip], [title], button, input, select, textarea, label.check';
+    const simpleSelector = '[data-tooltip], [title]';
     if (root.matches?.(simpleSelector)) bindSimpleElement(root);
     root.querySelectorAll?.(simpleSelector).forEach(bindSimpleElement);
   };
@@ -256,14 +244,13 @@ export async function initializeHelp() {
   });
   observer.observe(document.body, { childList: true, subtree: true });
 
-  tooltip.addEventListener('mouseenter', () => clearTimeout(hideTimer));
-  tooltip.addEventListener('mouseleave', scheduleHide);
   document.addEventListener('pointerdown', (event) => {
     if (!tooltip.hidden && !tooltip.contains(event.target) && !active?.contains?.(event.target)) hide();
   });
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') hide();
   });
+  document.addEventListener('scroll', hide, true);
   addEventListener('resize', hide);
 
   return { definitions, attach, hide, scan };

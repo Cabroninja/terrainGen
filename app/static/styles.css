@@ -2131,3 +2131,467 @@ body.voxel-3d-open {
 .canvas-stage {
   margin: auto;
 }
+
+/* =========================================================
+   UI v4.1 — divisores redimensionables + ayuda solo por clic
+   ========================================================= */
+
+:root {
+  --ui-inspector-navigation-size: 40%;
+  --ui-validation-width: 290px;
+  --ui-validation-height: 150px;
+  --ui-splitter-size: 6px;
+}
+
+.inspector-dock {
+  grid-template-rows:
+    minmax(110px, var(--ui-inspector-navigation-size))
+    var(--ui-splitter-size)
+    minmax(125px, 1fr);
+}
+
+.layer-dock {
+  border-bottom: 0;
+}
+
+.ui-splitter {
+  position: relative;
+  z-index: 8;
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: #191c1e;
+  touch-action: none;
+}
+
+.ui-splitter::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: transparent;
+  transition: background-color 100ms ease;
+}
+
+.ui-splitter:hover::before,
+.ui-splitter:focus-visible::before,
+body.ui-resizing-row .inspector-splitter::before,
+body.ui-resizing-column .results-splitter::before {
+  background: color-mix(in srgb, var(--ui-accent) 34%, transparent);
+}
+
+.splitter-grip {
+  position: relative;
+  z-index: 1;
+  display: block;
+  border-radius: 999px;
+  background: #60676b;
+  pointer-events: none;
+}
+
+.inspector-splitter {
+  cursor: row-resize;
+  border-top: 1px solid #0f1112;
+  border-bottom: 1px solid var(--ui-line);
+}
+
+.inspector-splitter .splitter-grip {
+  width: 34px;
+  height: 2px;
+}
+
+.results-drawer-content {
+  grid-template-columns:
+    minmax(170px, var(--ui-validation-width))
+    var(--ui-splitter-size)
+    minmax(300px, 1fr);
+}
+
+.validation-panel {
+  border-right: 0;
+}
+
+.results-splitter {
+  cursor: col-resize;
+  border-right: 1px solid var(--ui-line);
+  border-left: 1px solid #111315;
+}
+
+.results-splitter .splitter-grip {
+  width: 2px;
+  height: 34px;
+}
+
+body.ui-resizing-row,
+body.ui-resizing-row * {
+  cursor: row-resize !important;
+  user-select: none !important;
+}
+
+body.ui-resizing-column,
+body.ui-resizing-column * {
+  cursor: col-resize !important;
+  user-select: none !important;
+}
+
+/* La ayuda no se abre al pasar el mouse ni al enfocar controles.
+   Solo estos iconos explícitos disparan el tooltip. */
+.has-inline-help {
+  position: relative;
+}
+
+.inline-help-trigger {
+  position: absolute;
+  z-index: 4;
+  top: 2px;
+  right: 2px;
+  width: 11px;
+  height: 11px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid #5a6267;
+  border-radius: 50%;
+  background: #202528e8;
+  color: #aeb7bb;
+  font-size: 7px;
+  font-style: normal;
+  font-weight: 750;
+  line-height: 1;
+  opacity: .50;
+  cursor: help;
+  transition: opacity 100ms ease, color 100ms ease, border-color 100ms ease, background-color 100ms ease;
+}
+
+.has-inline-help:hover > .inline-help-trigger,
+.inline-help-trigger:hover,
+.inline-help-trigger:focus-visible,
+.inline-help-trigger[aria-expanded="true"] {
+  border-color: #839096;
+  background: #31383c;
+  color: #fff;
+  opacity: 1;
+}
+
+.inline-help-trigger:focus-visible {
+  outline: 1px solid var(--ui-focus, #7fa7d8);
+  outline-offset: 1px;
+}
+
+.inline-help-trigger--sibling {
+  position: static;
+  flex: 0 0 11px;
+  margin-left: 3px;
+}
+
+/* Evita que el icono tape los textos de botones grandes, pestañas y checks. */
+button.has-inline-help:not(.icon-button),
+label.has-inline-help {
+  padding-right: 15px;
+}
+
+.icon-button.has-inline-help .inline-help-trigger {
+  top: -3px;
+  right: -3px;
+}
+
+/* El contenido de ayuda sigue sin bloquear el resto del editor. */
+.help-tooltip {
+  pointer-events: none;
+}
+
+@media (max-width: 700px) {
+  .results-drawer-content {
+    grid-template-columns: 1fr;
+    grid-template-rows:
+      minmax(90px, var(--ui-validation-height))
+      var(--ui-splitter-size)
+      minmax(220px, 1fr);
+    overflow: hidden;
+  }
+
+  .validation-panel {
+    max-height: none;
+    border-bottom: 0;
+  }
+
+  .results-splitter {
+    cursor: row-resize;
+    border-top: 1px solid #111315;
+    border-right: 0;
+    border-bottom: 1px solid var(--ui-line);
+    border-left: 0;
+  }
+
+  .results-splitter .splitter-grip {
+    width: 34px;
+    height: 2px;
+  }
+}
+
+
+/* =========================================================
+   UI v4.2 — altura ajustable del panel de resultados
+   ========================================================= */
+:root {
+  --ui-results-drawer-height: min(52vh, 520px);
+}
+
+.results-drawer {
+  height: var(--ui-results-drawer-height);
+  min-height: 180px;
+  max-height: calc(100vh - var(--ui-topbar-height) - 18px);
+  grid-template-rows:
+    var(--ui-splitter-size)
+    auto
+    minmax(0, 1fr);
+}
+
+.results-drawer-resizer {
+  cursor: row-resize;
+  border-top: 1px solid #0d0f10;
+  border-bottom: 1px solid var(--ui-line);
+  background: #171a1c;
+}
+
+.results-drawer-resizer .splitter-grip {
+  width: 52px;
+  height: 2px;
+}
+
+.results-drawer-resizer:hover::before,
+.results-drawer-resizer:focus-visible::before,
+body.ui-resizing-results-drawer .results-drawer-resizer::before {
+  background: color-mix(in srgb, var(--ui-focus, #7fa7d8) 42%, transparent);
+}
+
+body.ui-resizing-results-drawer,
+body.ui-resizing-results-drawer * {
+  cursor: row-resize !important;
+  user-select: none !important;
+}
+
+@media (max-width: 700px) {
+  .results-drawer {
+    height: var(--ui-results-drawer-height);
+    min-height: 240px;
+    max-height: calc(100vh - var(--ui-topbar-height) - 8px);
+  }
+}
+
+/* =========================================================
+   UI v5.0 — resultados acoplables abajo o a la derecha
+   ========================================================= */
+:root {
+  --ui-results-drawer-width: min(44vw, 720px);
+}
+
+.results-header-actions,
+.results-dock-options {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.results-dock-options {
+  padding: 2px;
+  border: 1px solid var(--ui-line-soft);
+  border-radius: var(--ui-radius);
+  background: #191c1e;
+}
+
+.results-dock-options button {
+  min-height: 22px;
+  height: 22px;
+  padding: 0 7px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--ui-muted);
+  font-size: 9px;
+}
+
+.results-dock-options button.active {
+  border-color: #52675a;
+  background: var(--ui-accent-soft);
+  color: #e2eee5;
+}
+
+body.results-dock-bottom .results-drawer {
+  top: auto;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  width: auto;
+  height: var(--ui-results-drawer-height);
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: var(--ui-splitter-size) auto minmax(0, 1fr);
+}
+
+body.results-dock-bottom .results-drawer-resizer {
+  grid-column: 1;
+  grid-row: 1;
+  cursor: row-resize;
+  border-top: 1px solid #0d0f10;
+  border-right: 0;
+  border-bottom: 1px solid var(--ui-line);
+  border-left: 0;
+}
+
+body.results-dock-bottom .results-drawer-resizer .splitter-grip {
+  width: 52px;
+  height: 2px;
+}
+
+body.results-dock-bottom .results-drawer-header {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+body.results-dock-bottom .results-drawer-content {
+  grid-column: 1;
+  grid-row: 3;
+}
+
+body.results-open.results-dock-right .workspace {
+  width: calc(100vw - var(--ui-results-drawer-width));
+}
+
+body.results-dock-right .results-drawer {
+  top: var(--ui-topbar-height);
+  right: 0;
+  bottom: 0;
+  left: auto;
+  width: var(--ui-results-drawer-width);
+  height: auto;
+  min-width: 300px;
+  min-height: 0;
+  max-width: calc(100vw - 520px);
+  max-height: none;
+  grid-template-columns: var(--ui-splitter-size) minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  border-top: 0;
+  border-right: 0;
+  border-bottom: 0;
+  border-left: 1px solid var(--ui-line);
+}
+
+body.results-dock-right .results-drawer-resizer {
+  grid-column: 1;
+  grid-row: 1 / -1;
+  cursor: col-resize;
+  border-top: 0;
+  border-right: 1px solid var(--ui-line);
+  border-bottom: 0;
+  border-left: 1px solid #0d0f10;
+}
+
+body.results-dock-right .results-drawer-resizer .splitter-grip {
+  width: 2px;
+  height: 52px;
+}
+
+body.results-dock-right .results-drawer-header {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+body.results-dock-right .results-drawer-content {
+  grid-column: 2;
+  grid-row: 2;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows:
+    minmax(90px, var(--ui-validation-height))
+    var(--ui-splitter-size)
+    minmax(280px, 1fr);
+}
+
+body.results-dock-right .validation-panel {
+  border-right: 0;
+  border-bottom: 0;
+}
+
+body.results-dock-right .results-splitter {
+  cursor: row-resize;
+  border-top: 1px solid #111315;
+  border-right: 0;
+  border-bottom: 1px solid var(--ui-line);
+  border-left: 0;
+}
+
+body.results-dock-right .results-splitter .splitter-grip {
+  width: 34px;
+  height: 2px;
+}
+
+body.ui-resizing-results-drawer-row,
+body.ui-resizing-results-drawer-row * {
+  cursor: row-resize !important;
+  user-select: none !important;
+}
+
+body.ui-resizing-results-drawer-column,
+body.ui-resizing-results-drawer-column * {
+  cursor: col-resize !important;
+  user-select: none !important;
+}
+
+body.ui-resizing-results-drawer-row .results-drawer-resizer::before,
+body.ui-resizing-results-drawer-column .results-drawer-resizer::before {
+  background: color-mix(in srgb, var(--ui-focus, #7fa7d8) 42%, transparent);
+}
+
+/* Las reglas antiguas de v4.2 solo usaban esta clase. */
+body.ui-resizing-results-drawer,
+body.ui-resizing-results-drawer * {
+  cursor: inherit;
+}
+
+@media (max-width: 900px) {
+  body.results-open.results-dock-right .workspace,
+  body.results-open.results-dock-bottom .workspace {
+    width: 100%;
+  }
+
+  body.results-dock-right .results-drawer {
+    top: auto;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    width: auto;
+    height: var(--ui-results-drawer-height);
+    min-width: 0;
+    max-width: none;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: var(--ui-splitter-size) auto minmax(0, 1fr);
+    border-top: 1px solid var(--ui-line);
+    border-left: 0;
+  }
+
+  body.results-dock-right .results-drawer-resizer {
+    grid-column: 1;
+    grid-row: 1;
+    cursor: row-resize;
+    border-top: 1px solid #0d0f10;
+    border-right: 0;
+    border-bottom: 1px solid var(--ui-line);
+    border-left: 0;
+  }
+
+  body.results-dock-right .results-drawer-resizer .splitter-grip {
+    width: 52px;
+    height: 2px;
+  }
+
+  body.results-dock-right .results-drawer-header {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  body.results-dock-right .results-drawer-content {
+    grid-column: 1;
+    grid-row: 3;
+  }
+}

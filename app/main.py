@@ -11,21 +11,28 @@ from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.core.models import CompileRequest
+from app.core.models import (
+    CompileRequest, LibraryAssetUpdate, LibraryCollectionCreate,
+    LibraryMemberUpdate, LibraryPresetPayload,
+)
 from app.exporters import read_voxel_chunk, write_preview_images, write_schematic, write_terrain_3d_data, write_voxel_source
 from app.terrain import compile_project
 from app.structures import parse_schematic_bytes
+from app.library_store import LibraryStore
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 OUTPUT_DIR = Path(os.getenv("OUTPUT_DIR", BASE_DIR / "output"))
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+DATA_DIR = Path(os.getenv("DATA_DIR", BASE_DIR / "data"))
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+LIBRARY = LibraryStore(DATA_DIR / "library")
 
-app = FastAPI(title="JKR Terrain Generator", version="3.3.0")
+app = FastAPI(title="JKR Terrain Generator", version="5.0.0")
 
 
 @app.get("/api/health")
 def health() -> dict:
-    return {"status": "ok", "version": "3.3.0", "architecture": "paint-first"}
+    return {"status": "ok", "version": "5.0.0", "architecture": "paint-first", "library": "server"}
 
 
 @app.post("/api/structures/import")
@@ -52,6 +59,92 @@ async def import_structure(file: UploadFile = File(...)) -> dict:
         "data_version": parsed.data_version,
         "content_b64": base64.b64encode(raw).decode("ascii"),
     }
+
+
+@app.get("/api/library/presets/{group}")
+def list_library_presets(group: str) -> dict:
+    try:
+        return {"group": group, "presets": LIBRARY.list_presets(group)}
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.put("/api/library/presets/{group}/{name}")
+def save_library_preset(group: str, name: str, payload: LibraryPresetPayload) -> dict:
+    try:
+        return LIBRARY.save_preset(group, name, payload.values)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.delete("/api/library/presets/{group}/{name}")
+def delete_library_preset(group: str, name: str) -> dict:
+    try:
+        deleted = LIBRARY.delete_preset(group, name)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Preset no encontrado")
+    return {"deleted": True, "group": group, "name": name}
+
+
+@app.get("/api/library/structures")
+def get_structure_library() -> dict:
+    return LIBRARY.export_structures()
+
+
+@app.post("/api/library/structures/collections")
+def create_library_collection(payload: LibraryCollectionCreate) -> dict:
+    try:
+        return LIBRARY.create_collection(payload.label, payload.category)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.delete("/api/library/structures/collections/{collection_id}")
+def delete_library_collection(collection_id: str) -> dict:
+    if not LIBRARY.delete_collection(collection_id):
+        raise HTTPException(status_code=404, detail="Colección no encontrada")
+    return {"deleted": True, "collection_id": collection_id}
+
+
+@app.post("/api/library/structures/collections/{collection_id}/assets")
+async def import_library_asset(collection_id: str, file: UploadFile = File(...)) -> dict:
+    filename = Path(file.filename or "estructura.schem").name
+    if not filename.lower().endswith(".schem"):
+        raise HTTPException(status_code=422, detail="Solo se admiten archivos .schem Sponge v2/v3.")
+    raw = await file.read()
+    try:
+        parsed = parse_schematic_bytes(raw)
+        asset, collection = LIBRARY.import_asset(collection_id, filename, raw, parsed)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc).strip("'")) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {"asset": asset, "collection": collection}
+
+
+@app.patch("/api/library/structures/collections/{collection_id}/members/{asset_id}")
+def update_library_member(collection_id: str, asset_id: str, payload: LibraryMemberUpdate) -> dict:
+    try:
+        return LIBRARY.update_member(collection_id, asset_id, payload.weight)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc).strip("'")) from exc
+
+
+@app.patch("/api/library/structures/assets/{asset_id}")
+def update_library_asset(asset_id: str, payload: LibraryAssetUpdate) -> dict:
+    try:
+        return LIBRARY.update_asset(asset_id, payload.model_dump(exclude_none=True))
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc).strip("'")) from exc
+
+
+@app.delete("/api/library/structures/collections/{collection_id}/assets/{asset_id}")
+def delete_library_asset(collection_id: str, asset_id: str) -> dict:
+    if not LIBRARY.delete_asset(collection_id, asset_id):
+        raise HTTPException(status_code=404, detail="Schematic no encontrado")
+    return {"deleted": True, "collection_id": collection_id, "asset_id": asset_id}
 
 
 @app.post("/api/validate")
